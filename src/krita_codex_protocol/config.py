@@ -36,6 +36,10 @@ class BridgeConfig:
     max_response_bytes: int = 16_777_216
     preview_max_dimension: int = 2048
     preview_max_bytes: int = 8_388_608
+    asset_max_bytes: int = 67_108_864
+    asset_batch_max_bytes: int = 268_435_456
+    asset_max_frames: int = 256
+    asset_render_max_pixels: int = 134_217_728
     document_max_dimension: int = 16_384
     document_max_pixels: int = 67_108_864
 
@@ -94,6 +98,26 @@ class BridgeConfig:
         preview_bytes = _bounded_int(
             raw, "preview_max_bytes", 8_388_608, minimum=65_536, maximum=max_response
         )
+        asset_bytes = _bounded_int(
+            raw, "asset_max_bytes", 67_108_864, minimum=65_536, maximum=268_435_456
+        )
+        asset_batch_bytes = _bounded_int(
+            raw,
+            "asset_batch_max_bytes",
+            268_435_456,
+            minimum=asset_bytes,
+            maximum=1_073_741_824,
+        )
+        asset_frames = _bounded_int(
+            raw, "asset_max_frames", 256, minimum=1, maximum=1024
+        )
+        asset_render_pixels = _bounded_int(
+            raw,
+            "asset_render_max_pixels",
+            134_217_728,
+            minimum=4096,
+            maximum=1_073_741_824,
+        )
         document_dimension = _bounded_int(
             raw, "document_max_dimension", 16_384, minimum=64, maximum=32_768
         )
@@ -114,6 +138,10 @@ class BridgeConfig:
             max_response_bytes=max_response,
             preview_max_dimension=preview_dimension,
             preview_max_bytes=preview_bytes,
+            asset_max_bytes=asset_bytes,
+            asset_batch_max_bytes=asset_batch_bytes,
+            asset_max_frames=asset_frames,
+            asset_render_max_pixels=asset_render_pixels,
             document_max_dimension=document_dimension,
             document_max_pixels=document_pixels,
         )
@@ -129,6 +157,10 @@ class BridgeConfig:
             "max_response_bytes": self.max_response_bytes,
             "preview_max_dimension": self.preview_max_dimension,
             "preview_max_bytes": self.preview_max_bytes,
+            "asset_max_bytes": self.asset_max_bytes,
+            "asset_batch_max_bytes": self.asset_batch_max_bytes,
+            "asset_max_frames": self.asset_max_frames,
+            "asset_render_max_pixels": self.asset_render_max_pixels,
             "document_max_dimension": self.document_max_dimension,
             "document_max_pixels": self.document_max_pixels,
         }

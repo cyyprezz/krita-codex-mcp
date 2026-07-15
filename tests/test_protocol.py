@@ -30,6 +30,10 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(ProtocolError, "unsupported operation"):
             BridgeRequest(operation="execute_python", arguments={})
 
+    def test_accepts_canvas_and_edit_operations(self) -> None:
+        self.assertEqual(BridgeRequest(operation="canvas", arguments={}).operation, "canvas")
+        self.assertEqual(BridgeRequest(operation="edit", arguments={}).operation, "edit")
+
     def test_response_requires_exactly_one_payload(self) -> None:
         request = BridgeRequest(operation="state", arguments={})
         with self.assertRaisesRegex(ProtocolError, "exactly one"):

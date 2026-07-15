@@ -41,10 +41,10 @@ Structured failure:
 }
 ```
 
-Only `state`, `preview`, `document`, `layers`, `history`, `brush`, `paint_path`, and `save_export`
-are valid operations. Request IDs are checked in both directions. The bridge accepts one
-operation at a time and enforces request, response, preview, document-size, point-count and
-timeout limits.
+Only `state`, `preview`, `canvas`, `edit`, `document`, `layers`, `history`, `brush`, `paint_path`,
+`asset`, and `save_export` are valid operations. Request IDs are checked in both directions. The
+bridge accepts one operation at a time and enforces request, response, preview, import/asset-size,
+document-size, point-count and timeout limits.
 
 `bridge_revision` counts successful mutations performed through this bridge instance. It is not
 a document revision and does not detect edits made manually in Krita or by another plugin.
@@ -60,14 +60,91 @@ the first spike expects one Krita undo step per segment and the live checklist v
 The public request accepts numeric coordinates. At the Krita 5.3.2.1 binding boundary they are
 rounded to integer `QPoint` values because that version rejects `QPointF` for `Node.paintLine`.
 
-`document` supports `list`, `create`, `open`, `activate`, and `close`. Open paths are canonicalized
-and checked on both sides of the bridge. Modified documents refuse to close unless
-`discard_changes=true` is explicit. Document IDs are stable for the lifetime of the plugin and
-document, but are not persisted across Krita restarts.
+`document` supports `list`, `create`, `open`, `activate`, `save`, and `close`. Open paths are
+canonicalized and checked on both sides of the bridge. `save` is an in-place KRA checkpoint for a
+document that already has an allowed `.kra` path; a new document must first use `save_export` with
+a KRA path. Modified documents refuse to close unless `discard_changes=true` is explicit.
+Document IDs are stable for the lifetime of the plugin and document, but are not persisted across
+Krita restarts.
+
+State, preview, canvas, edit, layer, history, brush, paint and save/export requests accept an
+optional `document_id`. Reads can inspect an inactive document without changing the visible
+selection. View-dependent mutations first switch to the concrete Krita view that owns the target
+document and fail closed if Krita cannot confirm the switch. Responses identify the document they
+used.
+
+`preview` returns either a bounded whole-canvas thumbnail or a bounded document-projection region.
+An explicit `x`, `y`, `width`, `height` region may be enlarged by an integer scale of 1–16 using
+nearest-neighbor sampling, while `max_width` and `max_height` remain hard output bounds.
+
+`canvas` supports `read`, `sample_color`, `resize`, `scale`, `crop`, `rotate`, `flip`, and
+`import_layer`. Color sampling reads one composited projection pixel and returns RGBA plus
+`#RRGGBBAA`. Canvas resize uses one of nine explicit anchors; image scaling accepts only a strategy
+reported by Krita, including `NearestNeighbor` on the validated Windows target. Crop rectangles
+must stay inside the current canvas. Flip uses Krita's image-pixel actions rather than the
+view-only mirror action.
+
+`import_layer` accepts only existing raster files beneath allowed roots, checks encoded bytes and
+decoded dimensions, and embeds the pixels into a new editable paint layer. The initial contract is
+limited to RGBA/U8 destination documents so pixel layout conversion fails closed instead of
+guessing. The import path is not retained as a file-layer dependency.
+
+`edit` supports selection status, rectangle/all/opaque selection, replace/add/subtract/intersect
+combination, deselect, invert, grow, shrink, fill, and clear. Fill and clear require both a
+non-empty document selection and an explicit paint-layer UUID; locked or non-paint layers fail
+closed. They trigger Krita's native registered actions and report one expected undo step. Selection
+mask changes increment `bridge_revision`, but are not presented as document-content undo steps.
 
 `history` exposes bounded `undo`/`redo` steps through Krita's own registered actions. `brush`
 reads or sets the native preset, size, opacity, flow, rotation, eraser/pressure state and managed
 foreground color; preset listing is filtered and capped.
+
+`layers` returns a bottom-to-top recursive tree with stable UUIDs, parent UUIDs, sibling indices,
+canvas positions and content bounds. In addition to create/activate/rename/properties, it supports
+native duplication, deletion, translation and reparenting/reordering. `reorder` moves to the root
+when `parent_id` is omitted; `above_id` optionally names a direct child of the destination and an
+omitted `above_id` inserts at the bottom. Cycles and non-group destinations fail closed.
+Layer properties include visibility, opacity, lock, paint-layer alpha lock, alpha inheritance and
+a conservative allow-list of stable Krita blending-mode IDs. Multi-property changes are verified
+through getters and rolled back if Krita rejects any field. `merge_down` is intentionally limited
+to two adjacent, visible, unlocked paint layers; it reports both consumed UUIDs and explicitly
+states that Krita discards the source layer metadata. One normal Krita Undo restores the two
+layers.
+
+`asset` supports `export_layer` for paint layers and groups. It clones the document, isolates the
+target by its validated layer-index path, renders Krita's document projection and atomically
+replaces the requested PNG only after encoding and size checks. The original document's visibility
+and modified state are untouched. Canvas-sized and content-cropped output are supported, and the
+MCP result includes a direct PNG preview. Krita 5.3.2.1's native `Node.save` path was explicitly
+rejected after the live group export blocked the Qt main thread.
+
+`asset` also supports `export_animation` for a group whose direct paint/group children are frames. The caller
+can provide explicit frame UUID order or use Krita's bottom-to-top child order. It exports stable
+numeric sequence filenames, an equal-cell spritesheet, a scaled direct sheet preview and a
+`dev.desens.krita-codex.unity-animation` v1 manifest containing timing, loop, hashes, source IDs,
+top-left PNG rectangles, bottom-left Unity rectangles, pivot and pixels-per-unit metadata. `canvas`
+uses the full document; `union` computes one shared crop from every isolated frame's rendered alpha,
+so frames do not jump because of per-frame trimming and empty individual frames remain valid.
+
+The animation output path is a managed package directory containing `spritesheet.png`,
+`manifest.json` and `frames/0000.png` onward. A new package is fully staged before it appears.
+Re-export uses the ownership manifest as a fail-closed gate, transactionally replaces only known
+generated files, preserves `.meta` sidecars and writes the manifest last in the staged package.
+Unknown non-empty directories are never recursively overwritten. Frame-count, individual-file,
+batch-byte, rendered-pixel, sheet-dimension and sheet-pixel limits are enforced.
+
+`asset` additionally supports `export_tileset` and `export_regions`. A tileset uses an explicit or
+auto-fitted top-left grid with tile size, origin and optional spacing. Named regions accept a
+bounded request-ordered list of unique rectangles. Every rectangle must fit completely inside the
+canvas. Both actions render one isolated full-canvas `spritesheet.png`, stable
+`regions/0000.png` files and a `dev.desens.krita-codex.unity-regions` v1 manifest. The manifest
+contains Point-filter Unity settings, PPU/pivot metadata, source identifiers, file hashes and both
+top-left PNG and bottom-left Unity sprite rectangles. Optional `skip_empty` uses rendered alpha,
+not RGB bytes, and preserves each retained region's source index.
+
+Region output uses the same staged, schema-gated transaction as animation output. Animation and
+region packages cannot overwrite one another, symbolic managed paths fail closed, only known
+generated files are replaced and Unity `.meta` files remain untouched.
 
 The canonical dependency-free protocol package is `src/krita_codex_protocol`. The Windows
 installer copies that same package next to the Krita plugin, so the two processes use the same

@@ -13,6 +13,8 @@ from typing import Any
 from krita_codex_mcp.bridge_client import BridgeCallError, BridgeClient
 from krita_codex_protocol import BridgeConfig, PathPolicy, PathPolicyError
 
+DOCUMENT_NAME = "Codex Core E2E"
+
 
 def _find_layer(layers: list[dict[str, Any]], layer_id: str) -> dict[str, Any] | None:
     for layer in layers:
@@ -77,6 +79,20 @@ def _check_wrong_token(config: BridgeConfig) -> None:
     raise RuntimeError("Bridge accepted an invalid authentication token")
 
 
+async def _cleanup_stale(client: BridgeClient) -> None:
+    listed = await client.execute("document", {"action": "list"})
+    for document in listed["documents"]:
+        if document["name"] == DOCUMENT_NAME:
+            await client.execute(
+                "document",
+                {
+                    "action": "close",
+                    "document_id": document["document_id"],
+                    "discard_changes": True,
+                },
+            )
+
+
 async def run(output_dir: Path) -> dict[str, Any]:
     config = BridgeConfig.load()
     try:
@@ -96,7 +112,22 @@ async def run(output_dir: Path) -> dict[str, Any]:
 
     client = BridgeClient(config)
     await asyncio.to_thread(_check_wrong_token, config)
-    state = await client.execute("state", {})
+    await _cleanup_stale(client)
+    created_document = await client.execute(
+        "document",
+        {
+            "action": "create",
+            "width": 512,
+            "height": 512,
+            "name": DOCUMENT_NAME,
+            "color_model": "RGBA",
+            "color_depth": "U8",
+            "profile": "",
+            "resolution": 72.0,
+        },
+    )
+    document_id = created_document["affected_document_id"]
+    state = await client.execute("state", {"document_id": document_id})
     if not state["capabilities"]["native_paint_line"]:
         raise RuntimeError("This Krita build does not expose Node.paintLine")
 
@@ -205,12 +236,16 @@ async def run(output_dir: Path) -> dict[str, Any]:
     await _expect_error(
         client,
         "save_export",
-        {"png_path": str(safe_output.parent / "outside-allowed-root.png")},
+        {
+            "png_path": str(
+                Path(config.allowed_roots[0].anchor) / "krita-codex-outside-allowed-root.png"
+            )
+        },
         "PATH_NOT_ALLOWED",
     )
 
-    final_state = await client.execute("state", {})
-    return {
+    final_state = await client.execute("state", {"document_id": document_id})
+    result = {
         "krita_version": final_state["krita_version"],
         "canvas": [final_state["document"]["width"], final_state["document"]["height"]],
         "original_top_level_layers": original_layer_count,
@@ -230,13 +265,26 @@ async def run(output_dir: Path) -> dict[str, Any]:
             "outside_root_blocked",
         ],
     }
+    await client.execute(
+        "document",
+        {"action": "close", "document_id": document_id, "discard_changes": True},
+    )
+    return result
+
+
+async def run_with_cleanup(output_dir: Path) -> dict[str, Any]:
+    try:
+        return await run(output_dir)
+    except Exception:
+        await _cleanup_stale(BridgeClient(BridgeConfig.load()))
+        raise
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the live Krita bridge smoke test")
     parser.add_argument("--output-dir", type=Path, required=True)
     arguments = parser.parse_args()
-    result = asyncio.run(run(arguments.output_dir.resolve()))
+    result = asyncio.run(run_with_cleanup(arguments.output_dir.resolve()))
     print(json.dumps(result, indent=2, ensure_ascii=False))
 
 

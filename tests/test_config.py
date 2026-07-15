@@ -16,6 +16,23 @@ class BridgeConfigTests(unittest.TestCase):
             )
         self.assertEqual(config.host, "127.0.0.1")
         self.assertEqual(config.execute_url, "http://127.0.0.1:17641/v1/execute")
+        self.assertEqual(config.asset_max_bytes, 67_108_864)
+        self.assertEqual(config.asset_batch_max_bytes, 268_435_456)
+        self.assertEqual(config.asset_max_frames, 256)
+        self.assertEqual(config.asset_render_max_pixels, 134_217_728)
+
+    def test_rejects_excessive_asset_byte_limit(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaisesRegex(ConfigError, "asset_max_bytes"),
+        ):
+            BridgeConfig.from_mapping(
+                {
+                    "token": "x" * 32,
+                    "allowed_roots": [directory],
+                    "asset_max_bytes": 268_435_457,
+                }
+            )
 
     def test_rejects_non_loopback_bind(self) -> None:
         with (

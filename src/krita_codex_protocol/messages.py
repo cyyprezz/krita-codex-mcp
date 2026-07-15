@@ -10,11 +10,14 @@ ALLOWED_OPERATIONS = frozenset(
     {
         "state",
         "preview",
+        "canvas",
+        "edit",
         "document",
         "layers",
         "history",
         "brush",
         "paint_path",
+        "asset",
         "save_export",
     }
 )

@@ -22,17 +22,32 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
         expected = {
             "krita_state",
             "krita_preview",
+            "krita_canvas",
+            "krita_edit",
             "krita_document",
             "krita_layers",
             "krita_history",
             "krita_brush",
             "krita_paint_path",
+            "krita_asset",
             "krita_save_export",
         }
         if set(names) != expected:
             raise RuntimeError(f"Unexpected MCP tool surface: {names}")
+        asset_tool = next(tool for tool in listed.tools if tool.name == "krita_asset")
+        if "output_path" not in asset_tool.inputSchema.get("required", []):
+            raise RuntimeError("krita_asset does not require its output path")
+        asset_actions = asset_tool.inputSchema["properties"]["action"].get("enum", [])
+        if asset_actions != [
+            "export_layer",
+            "export_animation",
+            "export_tileset",
+            "export_regions",
+        ]:
+            raise RuntimeError(f"Unexpected krita_asset actions: {asset_actions}")
 
         created_document_id = None
+        asset_smoke = None
         try:
             state = await session.call_tool("krita_state", {})
             if state.isError:
@@ -55,6 +70,97 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
             if state.isError:
                 raise RuntimeError("krita_state returned an MCP tool error")
 
+            if created_document_id is not None:
+                state_payload = _structured_payload(state)
+                background_id = state_payload.get("active_layer_id")
+                if not isinstance(background_id, str):
+                    raise RuntimeError("krita_state returned no active background layer ID")
+                layer = await session.call_tool(
+                    "krita_layers",
+                    {
+                        "action": "create",
+                        "document_id": created_document_id,
+                        "name": "MCP Asset Smoke",
+                        "kind": "paintlayer",
+                    },
+                )
+                layer_id = _structured_payload(layer).get("affected_layer_id")
+                if layer.isError or not isinstance(layer_id, str):
+                    raise RuntimeError("krita_layers could not create the asset-smoke layer")
+                hidden = await session.call_tool(
+                    "krita_layers",
+                    {
+                        "action": "set_properties",
+                        "document_id": created_document_id,
+                        "layer_id": background_id,
+                        "visible": False,
+                    },
+                )
+                if hidden.isError:
+                    raise RuntimeError("krita_layers could not hide the smoke background")
+                selected = await session.call_tool(
+                    "krita_edit",
+                    {
+                        "action": "select_rect",
+                        "document_id": created_document_id,
+                        "x": 0,
+                        "y": 0,
+                        "width": 32,
+                        "height": 32,
+                    },
+                )
+                filled = await session.call_tool(
+                    "krita_edit",
+                    {
+                        "action": "fill",
+                        "document_id": created_document_id,
+                        "layer_id": layer_id,
+                        "color": "#7E57C2FF",
+                    },
+                )
+                if selected.isError or filled.isError:
+                    raise RuntimeError("krita_edit could not prepare the asset-smoke tile")
+                await session.call_tool(
+                    "krita_edit",
+                    {"action": "deselect", "document_id": created_document_id},
+                )
+                output_parent = repo_root / "e2e-output"
+                output_parent.mkdir(parents=True, exist_ok=True)
+                output_path = output_parent / "mcp-smoke-regions"
+                exported = await session.call_tool(
+                    "krita_asset",
+                    {
+                        "action": "export_tileset",
+                        "document_id": created_document_id,
+                        "layer_id": layer_id,
+                        "output_path": str(output_path),
+                        "overwrite": True,
+                        "tile_width": 32,
+                        "tile_height": 32,
+                        "skip_empty": True,
+                        "pixels_per_unit": 32,
+                    },
+                )
+                if exported.isError:
+                    raise RuntimeError("krita_asset could not export the smoke-test tileset")
+                asset_images = [
+                    item for item in exported.content if isinstance(item, types.ImageContent)
+                ]
+                asset_metadata = _text_payload(exported)
+                if len(asset_images) != 1 or asset_images[0].mimeType != "image/png":
+                    raise RuntimeError("krita_asset returned no direct PNG ImageContent")
+                if asset_metadata.get("region_count") != 1:
+                    raise RuntimeError("krita_asset skip_empty did not retain exactly one tile")
+                manifest_path = output_path / "manifest.json"
+                if not manifest_path.is_file():
+                    raise RuntimeError("krita_asset created no managed manifest")
+                asset_smoke = {
+                    "action": asset_metadata.get("action"),
+                    "region_count": asset_metadata.get("region_count"),
+                    "image_mime_type": asset_images[0].mimeType,
+                    "manifest_path": str(manifest_path),
+                }
+
             preview = await session.call_tool(
                 "krita_preview", {"max_width": 256, "max_height": 256}
             )
@@ -72,14 +178,20 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
 
             return {
                 "tools": names,
+                "asset_actions": asset_actions,
                 "created_smoke_document": created_document_id is not None,
                 "state_content_types": [type(item).__name__ for item in state.content],
                 "preview_content_types": [type(item).__name__ for item in preview.content],
                 "preview_mime_type": images[0].mimeType,
                 "preview_bytes": len(image_bytes),
+                "asset_smoke": asset_smoke,
             }
         finally:
             if created_document_id is not None:
+                await session.call_tool(
+                    "krita_edit",
+                    {"action": "deselect", "document_id": created_document_id},
+                )
                 closed = await session.call_tool(
                     "krita_document",
                     {
@@ -101,6 +213,15 @@ def _structured_payload(result) -> dict[str, object]:
             if isinstance(raw, dict):
                 return raw
     raise RuntimeError("MCP tool returned no structured object")
+
+
+def _text_payload(result) -> dict[str, object]:
+    for item in result.content:
+        if isinstance(item, types.TextContent):
+            raw = json.loads(item.text)
+            if isinstance(raw, dict):
+                return raw
+    raise RuntimeError("MCP tool returned no text metadata object")
 
 
 def main() -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import threading
+from contextlib import suppress
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Protocol
@@ -48,6 +49,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._simple_error(404, "NOT_FOUND", "Unknown bridge endpoint")
             return
         if not self._authorized():
+            self._discard_announced_body()
             self._simple_error(401, "UNAUTHORIZED", "Invalid bridge token")
             return
         content_type = self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -127,6 +129,18 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         expected = f"Bearer {self.server.config.token}"
         supplied = self.headers.get("Authorization", "")
         return hmac.compare_digest(expected, supplied)
+
+    def _discard_announced_body(self) -> None:
+        length_text = self.headers.get("Content-Length")
+        try:
+            length = int(length_text) if length_text is not None else 0
+        except ValueError:
+            return
+        if not 0 < length <= self.server.config.max_request_bytes:
+            return
+        self.connection.settimeout(min(self.server.config.request_timeout_seconds, 0.25))
+        with suppress(TimeoutError, OSError):
+            self.rfile.read(length)
 
     def _simple_error(self, status: int, code: str, message: str) -> None:
         self._json_response(status, {"ok": False, "error": {"code": code, "message": message}})

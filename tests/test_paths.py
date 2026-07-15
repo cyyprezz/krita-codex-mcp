@@ -54,6 +54,31 @@ class PathPolicyTests(unittest.TestCase):
             result = PathPolicy([Path(directory)]).validate_input(str(target), extensions={".kra"})
             self.assertEqual(result, target.resolve())
 
+    def test_accepts_new_output_directory_inside_allowed_root(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "hero_idle"
+            result = PathPolicy([root]).validate_output_directory(
+                str(target), overwrite=False
+            )
+            self.assertEqual(result, target.resolve())
+
+    def test_output_directory_cannot_replace_allowed_root(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaisesRegex(PathPolicyError, "allowed root"),
+        ):
+            root = Path(directory)
+            PathPolicy([root]).validate_output_directory(str(root), overwrite=True)
+
+    def test_existing_output_directory_requires_overwrite(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "hero_idle"
+            target.mkdir()
+            with self.assertRaisesRegex(PathPolicyError, "overwrite=true"):
+                PathPolicy([root]).validate_output_directory(str(target), overwrite=False)
+
     def test_rejects_input_outside_allowed_root(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory) / "allowed"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from pathlib import Path
 from typing import Any
 
 from mcp.types import ImageContent
@@ -12,7 +13,7 @@ from krita_codex_protocol import BridgeConfig
 
 class _FakeBridgeClient:
     async def execute(self, operation: str, _arguments: dict[str, Any]) -> dict[str, Any]:
-        if operation == "preview":
+        if operation in {"preview", "asset"}:
             return {"png_base64": "aGVsbG8=", "width": 1, "height": 1}
         return {"operation": operation}
 
@@ -26,18 +27,21 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self.temp.cleanup()
 
-    async def test_registers_exactly_the_eight_cohesive_tools(self) -> None:
+    async def test_registers_exactly_the_eleven_cohesive_tools(self) -> None:
         tools = await self.server.list_tools()
         self.assertEqual(
             [tool.name for tool in tools],
             [
                 "krita_state",
                 "krita_preview",
+                "krita_canvas",
+                "krita_edit",
                 "krita_document",
                 "krita_layers",
                 "krita_history",
                 "krita_brush",
                 "krita_paint_path",
+                "krita_asset",
                 "krita_save_export",
             ],
         )
@@ -50,6 +54,109 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(content[1].mimeType, "image/png")
         self.assertEqual(content[1].data, "aGVsbG8=")
         self.assertEqual(structured["result"][1]["type"], "image")
+
+    async def test_asset_export_returns_direct_image_content(self) -> None:
+        result = await self.server.call_tool(
+            "krita_asset",
+            {
+                "action": "export_layer",
+                "layer_id": "layer-1",
+                "output_path": str(Path(self.temp.name) / "frame.png"),
+                "preview_max_width": 64,
+                "preview_max_height": 64,
+            },
+        )
+        content, structured = result
+        self.assertEqual(len(content), 2)
+        self.assertIsInstance(content[1], ImageContent)
+        self.assertEqual(content[1].mimeType, "image/png")
+        self.assertEqual(structured["result"][1]["type"], "image")
+
+    async def test_asset_schema_requires_layer_and_output_path(self) -> None:
+        tools = {tool.name: tool for tool in await self.server.list_tools()}
+        required = tools["krita_asset"].inputSchema["required"]
+        self.assertIn("layer_id", required)
+        self.assertIn("output_path", required)
+        actions = tools["krita_asset"].inputSchema["properties"]["action"]["enum"]
+        self.assertEqual(
+            actions,
+            ["export_layer", "export_animation", "export_tileset", "export_regions"],
+        )
+        properties = tools["krita_asset"].inputSchema["properties"]
+        for field in ("tile_width", "tile_height", "grid_columns", "grid_rows", "regions"):
+            self.assertIn(field, properties)
+
+    async def test_canvas_and_edit_schemas_expose_bounded_actions(self) -> None:
+        tools = {tool.name: tool for tool in await self.server.list_tools()}
+        self.assertEqual(
+            tools["krita_canvas"].inputSchema["properties"]["action"]["enum"],
+            [
+                "read",
+                "sample_color",
+                "resize",
+                "scale",
+                "crop",
+                "rotate",
+                "flip",
+                "import_layer",
+            ],
+        )
+        self.assertEqual(
+            tools["krita_edit"].inputSchema["properties"]["action"]["enum"],
+            [
+                "selection_status",
+                "select_rect",
+                "select_all",
+                "select_opaque",
+                "deselect",
+                "invert",
+                "grow",
+                "shrink",
+                "fill",
+                "clear",
+            ],
+        )
+        self.assertIn("document_id", tools["krita_canvas"].inputSchema["properties"])
+        self.assertIn("document_id", tools["krita_edit"].inputSchema["properties"])
+
+    async def test_layer_schema_exposes_persistent_asset_operations(self) -> None:
+        tools = await self.server.list_tools()
+        layer_tool = next(tool for tool in tools if tool.name == "krita_layers")
+        self.assertEqual(
+            layer_tool.inputSchema["properties"]["action"]["enum"],
+            [
+                "read",
+                "create",
+                "activate",
+                "rename",
+                "set_properties",
+                "duplicate",
+                "delete",
+                "reorder",
+                "translate",
+                "merge_down",
+            ],
+        )
+        for field in ("locked", "alpha_locked", "inherit_alpha", "blending_mode"):
+            self.assertIn(field, layer_tool.inputSchema["properties"])
+
+    async def test_document_targeting_and_checkpoint_are_exposed(self) -> None:
+        tools = {tool.name: tool for tool in await self.server.list_tools()}
+        document_actions = tools["krita_document"].inputSchema["properties"]["action"]["enum"]
+        self.assertIn("save", document_actions)
+        for name in (
+            "krita_state",
+            "krita_preview",
+            "krita_canvas",
+            "krita_edit",
+            "krita_layers",
+            "krita_history",
+            "krita_brush",
+            "krita_paint_path",
+            "krita_asset",
+            "krita_save_export",
+        ):
+            self.assertIn("document_id", tools[name].inputSchema["properties"], name)
 
 
 if __name__ == "__main__":

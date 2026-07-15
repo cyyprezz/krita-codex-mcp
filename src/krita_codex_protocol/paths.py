@@ -63,6 +63,29 @@ class PathPolicy:
             raise PathPolicyError("input path must identify a file")
         return resolved
 
+    def validate_output_directory(self, value: str, *, overwrite: bool) -> Path:
+        if not isinstance(value, str) or not value.strip():
+            raise PathPolicyError("output directory must be a non-empty string")
+        candidate = Path(value).expanduser()
+        if not candidate.is_absolute():
+            raise PathPolicyError("output directory must be absolute")
+        if candidate.is_symlink():
+            raise PathPolicyError("output directory must not be a symbolic link")
+        resolved = candidate.resolve(strict=False)
+        if not self._is_allowed(resolved):
+            raise PathPolicyError("output directory is outside the configured allowed roots")
+        if any(resolved == root for root in self.allowed_roots):
+            raise PathPolicyError("output directory must not replace an allowed root")
+        if not resolved.parent.is_dir():
+            raise PathPolicyError("output parent directory does not exist")
+        if resolved.exists() and not resolved.is_dir():
+            raise PathPolicyError("output directory path already identifies a file")
+        if resolved.exists() and not overwrite:
+            raise PathPolicyError(
+                "output directory already exists; pass overwrite=true to replace it"
+            )
+        return resolved
+
     def _is_allowed(self, candidate: Path) -> bool:
         candidate_key = os.path.normcase(str(candidate))
         for root in self.allowed_roots:

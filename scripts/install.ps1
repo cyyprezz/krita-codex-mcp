@@ -81,6 +81,10 @@ $Config = [ordered]@{
     max_response_bytes = 16777216
     preview_max_dimension = 2048
     preview_max_bytes = 8388608
+    asset_max_bytes = 67108864
+    asset_batch_max_bytes = 268435456
+    asset_max_frames = 256
+    asset_render_max_pixels = 134217728
     document_max_dimension = 16384
     document_max_pixels = 67108864
 }
