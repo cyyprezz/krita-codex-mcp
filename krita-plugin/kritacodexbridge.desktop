@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Service
+ServiceTypes=Krita/PythonPlugin
+X-KDE-Library=kritacodexbridge
+X-Python-2-Compatible=false
+Name=Krita Codex Bridge
+Comment=Authenticated localhost bridge for the local krita-codex-mcp STDIO server

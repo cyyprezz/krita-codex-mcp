@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+.coverage
+htmlcov/
+/e2e-output/
+/.codex/config.toml
+
+# Local runtime configuration and secrets never belong in Git.
+config.local.json
+*.token
