@@ -46,6 +46,9 @@ class KritaService(
         self.bridge_revision = 0
         self._document_ids: dict[int, str] = {}
         self._destructive_transform_documents: dict[str, str] = {}
+        self._transform_mask_creation_counts: dict[str, int] = {}
+        self._created_transform_mask_ids: dict[str, set[str]] = {}
+        self._layer_transform_backend_session: str | None = None
 
     def execute(self, operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         handlers = {

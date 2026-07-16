@@ -514,9 +514,28 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
                     "strategy": "NearestNeighbor",
                     "x": 2,
                     "y": 3,
+                    "transform_mode": "mask",
                 },
             ),
         )
+
+        await self.service.layers(
+            action="rotate",
+            layer_id="layer-1",
+            angle_degrees=15,
+            transform_mode="direct",
+        )
+        self.assertEqual(self.client.calls[-1][1]["transform_mode"], "direct")
+
+    async def test_layer_transform_rejects_unknown_mode_before_bridge(self) -> None:
+        with self.assertRaisesRegex(InputError, "transform_mode"):
+            await self.service.layers(
+                action="rotate",
+                layer_id="layer-1",
+                angle_degrees=15,
+                transform_mode="unsafe",
+            )
+        self.assertEqual(self.client.calls, [])
         await self.service.layers(
             action="flip", layer_id="layer-1", direction="horizontal"
         )

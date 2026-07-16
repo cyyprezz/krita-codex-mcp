@@ -212,6 +212,8 @@ class DocumentOperationsMixin:
                 )
             self._document_ids.pop(id(doc), None)
             self._destructive_transform_documents.pop(document_id, None)
+            self._transform_mask_creation_counts.pop(document_id, None)
+            self._created_transform_mask_ids.pop(document_id, None)
             self.bridge_revision += 1
             result = self._document_result(app, action)
             result["closed_document_id"] = document_id

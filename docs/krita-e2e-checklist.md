@@ -78,12 +78,14 @@ $env:PYTHONPATH = "src"
     a new paint layer with a returned UUID, and that `copy_to_layer` and `cut_to_layer` create
     addressable layers. Undo the cut and confirm the source pixels return. Move and resize the
     selection mask and verify the image pixels remain unchanged until a later edit uses it.
-16. Exercise scale, rotate, shear and crop in separate disposable documents through
-    `krita_layers`; each transformed layer must remain addressable by UUID and return a hidden
-    full-layer backup UUID because those direct node APIs add no native Undo command. In one
-    document, apply one direct transform and confirm a second fails with
-    `UNSAFE_TRANSFORM_SEQUENCE` until save/close/reopen. Confirm flip still adds one native Undo
-    command and does not consume the direct-transform allowance.
+16. Exercise default mask-backed scale, rotate and shear on one asymmetric transparent layer
+    through `krita_layers`. Confirm three native `transformmask` UUIDs, three changed previews,
+    stable UUIDs after save/close/reopen, a blocked fourth mask, and original pixels after deleting
+    all masks post-reopen. Confirm same-session mask mutation/removal fails closed. In a freshly
+    restarted Krita process, exercise direct scale/rotate/shear/crop in separate disposable
+    documents; each must return a hidden backup UUID. Confirm a second direct transform fails with
+    `UNSAFE_TRANSFORM_SEQUENCE`, backend mixing fails with `UNSAFE_TRANSFORM_BACKEND_MIX`, and flip
+    remains one native Undo command.
 17. Draw a line, open and closed path, rectangle, ellipse and polygon through `krita_draw`. Verify
     native preset texture/dynamics, stroke/fill styles and one `Scripted Brush Stroke` Undo entry
     per shape. Reject unsupported style names and malformed geometry before painting.
@@ -144,6 +146,12 @@ backup layer UUID in an isolated document; a second direct transform in one open
 rejected before mutation to avoid the reproduced native teardown crash. Flip remained natively
 undoable. A three-entry `Hero Core` project palette survived a KRA save, close and reopen round
 trip.
+
+The transform-mask extension created native scale, rotate and shear masks on one asymmetric
+transparent layer. Their returned affine matrices and previews were distinct, the three mask UUIDs
+survived save/close/reopen, a fourth mask and same-session mutation/removal failed closed, and
+deleting all masks after reopen restored the original preview. Mixing direct and mask backends is
+blocked until Krita restarts because the combination reproduced a native teardown crash.
 
 A direct Codex MCP workflow created a 128x128 three-layer energy pickup, stored four project
 colors, exported KRA plus PNG, and reopened the KRA with the same three layer UUIDs and palette.

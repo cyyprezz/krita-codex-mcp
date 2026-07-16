@@ -57,9 +57,20 @@ async def close_stale(client: BridgeClient) -> None:
 
 async def probe_transform_undo(client: BridgeClient) -> dict[str, bool]:
     operations = {
-        "scale": {"width": 8, "height": 8, "x": 4, "y": 4, "strategy": "NearestNeighbor"},
-        "rotate": {"angle_degrees": 90.0},
-        "shear": {"shear_x_degrees": 15.0, "shear_y_degrees": 0.0},
+        "scale": {
+            "width": 8,
+            "height": 8,
+            "x": 4,
+            "y": 4,
+            "strategy": "NearestNeighbor",
+            "transform_mode": "direct",
+        },
+        "rotate": {"angle_degrees": 90.0, "transform_mode": "direct"},
+        "shear": {
+            "shear_x_degrees": 15.0,
+            "shear_y_degrees": 0.0,
+            "transform_mode": "direct",
+        },
         "crop": {"x": 0, "y": 0, "width": 6, "height": 6},
         "flip": {"direction": "horizontal"},
     }
@@ -457,6 +468,7 @@ async def run(output_dir: Path) -> dict[str, object]:
                 "x": 0,
                 "y": 0,
                 "strategy": "NearestNeighbor",
+                "transform_mode": "direct",
             },
         )
         try:
@@ -467,6 +479,7 @@ async def run(output_dir: Path) -> dict[str, object]:
                     "document_id": document_id,
                     "layer_id": transform_id,
                     "angle_degrees": 15.0,
+                    "transform_mode": "direct",
                 },
             )
         except BridgeCallError as exc:
@@ -516,6 +529,7 @@ async def run(output_dir: Path) -> dict[str, object]:
                 "document_id": reopened_id,
                 "layer_id": transform_id,
                 "angle_degrees": 5.0,
+                "transform_mode": "direct",
             },
         )
         if not reopened_transform.get("backup_layer_id"):

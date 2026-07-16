@@ -116,14 +116,29 @@ states that Krita discards the source layer metadata. One normal Krita Undo rest
 layers.
 
 Layer transforms include scale, arbitrary rotation, shear, crop and horizontal/vertical mirror.
+Scale, rotate and shear default to `transform_mode="mask"`. The plugin creates a native Krita
+`TransformMask`, starts from that running build's own `toXML()` template, changes only allow-listed
+affine fields, applies them with `fromXML()`, and validates the returned `finalAffineTransform()`.
+No transform XML crosses the MCP boundary. Each call creates a separate mask and returns its UUID,
+effective matrix and zero native Undo steps; removing the mask after a KRA round trip restores the
+unchanged source pixels.
+
+Krita 5.3.2.1 becomes teardown-unstable when transform masks are repeatedly rewritten, replaced,
+hidden/shown or removed in the same open session. The bridge therefore permits at most three
+transform masks in a document, rejects a fourth with `UNSAFE_TRANSFORM_MASK_SEQUENCE`, and blocks
+mutation or removal of a newly created mask with `UNSAFE_TRANSFORM_MASK_MUTATION`. Save, close and
+reopen the KRA before removing a mask. This cautious contract was live-verified with scale, rotate
+and shear, three distinct preview hashes, stable mask UUIDs after reopen, and source restoration.
+
+`transform_mode="direct"` remains an explicit compatibility fallback; crop is necessarily direct.
 Scale strategies are checked against the running Krita build. Krita 5.3.2.1 does not put direct
-`Node.scaleNode`, `rotateNode`, `shearNode`, or `cropNode` calls on its Undo stack; these four
-actions therefore create a hidden full-layer backup first and return `backup_layer_id`. Restore by
-showing that backup and removing/hiding the transformed layer. Mirror uses `mirrorNodeX/Y` and
-reports one native Undo step. A second direct node transform in the same open document triggers a
-native Krita 5.3.2.1 teardown crash even when it targets a different layer. The bridge therefore
-fails closed with `UNSAFE_TRANSFORM_SEQUENCE`; save, close and reopen the KRA before applying the
-next direct transform. Mirror remains available between direct transforms.
+`Node.scaleNode`, `rotateNode`, `shearNode`, or `cropNode` calls on its Undo stack, so each creates a
+hidden full-layer backup and returns `backup_layer_id`. A second direct transform in one open
+document fails with `UNSAFE_TRANSFORM_SEQUENCE`. Direct and mask layer-transform backends also may
+not be mixed in one Krita process, and direct mode is rejected while the target document contains
+transform masks. `UNSAFE_TRANSFORM_BACKEND_MIX` requires using mask mode, safely removing masks, or
+saving all documents and restarting Krita. Mirror uses `mirrorNodeX/Y`, reports one native Undo
+step, and is exempt from both backend guards.
 
 `draw` is a cohesive native-shape operation over `Node.paintLine`, `paintPath`, `paintPolygon`,
 `paintRectangle`, and `paintEllipse`. It accepts explicit foreground/background stroke and fill

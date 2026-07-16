@@ -153,6 +153,18 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn('"backup_layer_id": self._node_id(backup)', source)
         self.assertIn('"UNSAFE_TRANSFORM_SEQUENCE"', source)
         self.assertIn("self._destructive_transform_documents.get(document_id)", source)
+        self.assertIn("doc.createTransformMask", source)
+        self.assertIn("mask.toXML()", source)
+        self.assertIn("mask.fromXML(configured_xml)", source)
+        self.assertIn("mask.finalAffineTransform()", source)
+        self.assertIn('"transform_mode": "mask"', source)
+        self.assertIn("_MAX_TRANSFORM_MASKS = 3", source)
+        self.assertIn('"UNSAFE_TRANSFORM_MASK_SEQUENCE"', source)
+        self.assertIn("self._transform_mask_creation_counts.get(document_id, 0)", source)
+        self.assertIn('"UNSAFE_TRANSFORM_MASK_MUTATION"', source)
+        self.assertIn('"UNSAFE_TRANSFORM_BACKEND_MIX"', source)
+        self.assertIn("self._ensure_layer_transform_backend", source)
+        self.assertIn("self._created_transform_mask_ids.get", source)
         self.assertIn('"metadata_dropped"] = True', source)
 
     def test_file_export_temporarily_suppresses_krita_dialogs(self) -> None:
@@ -226,6 +238,8 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("active is not None and id(active) in live_keys", source)
         self.assertIn("doc.waitForDone()", source)
         self.assertIn('"UNSAVED_DOCUMENT"', source)
+        self.assertIn("self._transform_mask_creation_counts.pop(document_id, None)", source)
+        self.assertIn("self._created_transform_mask_ids.pop(document_id, None)", source)
 
     def test_service_entrypoint_stays_small_and_operations_are_split(self) -> None:
         service_lines = (PLUGIN_ROOT / "service.py").read_text(encoding="utf-8").splitlines()

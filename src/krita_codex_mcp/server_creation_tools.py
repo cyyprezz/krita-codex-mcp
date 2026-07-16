@@ -103,8 +103,9 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         shear_x_degrees: Annotated[float | None, Field(ge=-89, le=89)] = None,
         shear_y_degrees: Annotated[float | None, Field(ge=-89, le=89)] = None,
         direction: Literal["horizontal", "vertical"] | None = None,
+        transform_mode: Literal["mask", "direct"] = "mask",
     ) -> dict[str, Any]:
-        """Manage layers by UUID, including stack, properties, and native transformations."""
+        """Manage layers by UUID, including stack, properties, and guarded transformations."""
         return await tool_call(
             lambda: service.layers(
                 action=action,
@@ -131,6 +132,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
                 shear_x_degrees=shear_x_degrees,
                 shear_y_degrees=shear_y_degrees,
                 direction=direction,
+                transform_mode=transform_mode,
             )
         )
 

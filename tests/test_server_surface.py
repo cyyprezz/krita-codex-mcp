@@ -154,6 +154,10 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
         )
         for field in ("locked", "alpha_locked", "inherit_alpha", "blending_mode"):
             self.assertIn(field, layer_tool.inputSchema["properties"])
+        self.assertEqual(
+            layer_tool.inputSchema["properties"]["transform_mode"]["enum"],
+            ["mask", "direct"],
+        )
 
     async def test_document_targeting_and_checkpoint_are_exposed(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}

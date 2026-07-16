@@ -67,6 +67,20 @@ class LayerOperationsMixin:
         node = self._find_node(doc, layer_id)
         if node is None or self._same_node(node, doc.rootNode()):
             raise KritaOperationError("LAYER_NOT_FOUND", "Layer UUID was not found")
+        node_type = node.type().lower()
+        if node_type == "transformmask":
+            if action not in {"activate", "delete"}:
+                raise KritaOperationError(
+                    "UNSAFE_TRANSFORM_MASK_MUTATION",
+                    "Transform masks may only be activated or safely removed through the bridge",
+                )
+            created_ids = self._created_transform_mask_ids.get(self._document_id(doc), set())
+            if action == "delete" and layer_id in created_ids:
+                raise KritaOperationError(
+                    "UNSAFE_TRANSFORM_MASK_MUTATION",
+                    "A newly created transform mask cannot be removed in the same open document",
+                    {"recovery": "save, close, reopen, and then remove the transform mask"},
+                )
         operation_details: dict[str, Any] = {}
         if action == "activate":
             doc.setActiveNode(node)

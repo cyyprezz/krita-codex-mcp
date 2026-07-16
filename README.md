@@ -73,6 +73,13 @@ stroke APIs. If the installed Krita build lacks a required method, the operation
   UUID. Because two direct node transforms in one open document crash that Krita build during
   teardown, a second is rejected until the KRA is saved, closed and reopened. Native layer mirror
   remains one normal Undo step and does not count toward that guard.
+- The transform-mask live run verified non-destructive scale, rotate and shear on one asymmetric
+  transparent layer. Each operation created a native `transformmask`, changed the direct PNG
+  preview, survived a KRA save/close/reopen round trip with stable UUIDs, and could then be removed
+  to restore the original projection. Krita 5.3.2.1 is unstable when a mask is repeatedly mutated
+  or removed before the first reopen, so the bridge allows at most three masks, blocks same-session
+  mask mutation/removal, and refuses to mix mask and direct layer-transform backends until Krita is
+  restarted.
 - A direct Codex-to-Krita asset workflow created and reopened a layered transparent 128x128 pickup,
   preserved its project palette and stable layer UUIDs, and verified that whole-canvas previews
   retain transparent margins. Closing the final document now reports no stale active UUID.

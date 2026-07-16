@@ -51,6 +51,7 @@ class LayerServiceMixin:
         shear_x_degrees: float | None = None,
         shear_y_degrees: float | None = None,
         direction: str | None = None,
+        transform_mode: str = "mask",
     ) -> dict[str, Any]:
         actions = {
             "read",
@@ -143,11 +144,13 @@ class LayerServiceMixin:
                 arguments["x"] = bounded_int(x, "x", -1_000_000, 1_000_000)
             if y is not None:
                 arguments["y"] = bounded_int(y, "y", -1_000_000, 1_000_000)
+            arguments["transform_mode"] = self._normalize_transform_mode(transform_mode)
         elif action == "rotate":
             angle = finite_number(angle_degrees, "angle_degrees", -360.0, 360.0)
             if angle == 0:
                 raise InputError("angle_degrees must be non-zero")
             arguments["angle_degrees"] = angle
+            arguments["transform_mode"] = self._normalize_transform_mode(transform_mode)
         elif action == "shear":
             angle_x = finite_number(
                 shear_x_degrees if shear_x_degrees is not None else 0.0,
@@ -166,6 +169,7 @@ class LayerServiceMixin:
             arguments.update(
                 {"shear_x_degrees": angle_x, "shear_y_degrees": angle_y}
             )
+            arguments["transform_mode"] = self._normalize_transform_mode(transform_mode)
         elif action == "crop":
             crop_width = bounded_int(width, "width", 1, self.config.document_max_dimension)
             crop_height = bounded_int(
@@ -226,3 +230,9 @@ class LayerServiceMixin:
                     )
                 arguments["blending_mode"] = normalized_mode
         return await self.client.execute("layers", arguments)
+
+    @staticmethod
+    def _normalize_transform_mode(value: str) -> str:
+        if value not in {"mask", "direct"}:
+            raise InputError("transform_mode must be mask or direct")
+        return value
