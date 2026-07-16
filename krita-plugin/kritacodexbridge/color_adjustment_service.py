@@ -6,6 +6,7 @@ from krita import InfoObject, Krita, ManagedColor, Selection
 from PyQt5.QtCore import QRect
 
 from ._service_helpers import _bounded_int, _parse_qcolor, _required_text, _safe_call
+from .color_service import _REPLACE_MAX_PIXELS, _SAFE_FILTERS
 from .errors import KritaOperationError
 
 
@@ -23,11 +24,11 @@ class ColorAdjustmentOperationsMixin:
         width, height = int(bounds.width()), int(bounds.height())
         if width <= 0 or height <= 0:
             raise KritaOperationError("EMPTY_LAYER", "Target paint layer has no pixels")
-        if width * height > self._REPLACE_MAX_PIXELS:
+        if width * height > _REPLACE_MAX_PIXELS:
             raise KritaOperationError(
                 "COLOR_REPLACE_TOO_LARGE",
                 "Color replacement exceeds the bounded pixel limit",
-                {"pixels": width * height, "limit": self._REPLACE_MAX_PIXELS},
+                {"pixels": width * height, "limit": _REPLACE_MAX_PIXELS},
             )
         source_text = _required_text(arguments.get("from_color"), "from_color", 9)
         target_text = _required_text(arguments.get("to_color"), "to_color", 9)
@@ -114,7 +115,7 @@ class ColorAdjustmentOperationsMixin:
         layer_id = _required_text(arguments.get("layer_id"), "layer_id", 80)
         node = self._editable_paint_node(doc, layer_id)
         name = _required_text(arguments.get("filter_name"), "filter_name", 100)
-        if name not in self._SAFE_FILTERS:
+        if name not in _SAFE_FILTERS:
             raise KritaOperationError("INVALID_ARGUMENT", "Filter is not in the safe allowlist")
         filter_object = Krita.instance().filter(name)
         if filter_object is None:

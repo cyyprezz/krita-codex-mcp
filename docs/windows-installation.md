@@ -77,7 +77,18 @@ returns a non-zero exit code. Do not start productive Codex work until all categ
 
 ## 5. Configure Codex and start work
 
-Use the block printed by the installer, or adapt `.codex/config.toml.example`:
+Choose one configuration scope:
+
+- **Recommended, user-level:** add the server to
+  `C:\Users\<you>\.codex\config.toml`. It is then available to all local Codex tasks and Git
+  worktrees for that Windows account, and it appears with the other personal MCP servers.
+- **Optional, project-level:** copy `.codex/config.toml.example` to `.codex/config.toml` inside a
+  trusted checkout and replace the placeholder paths. The real file is intentionally ignored by
+  Git because it contains machine-specific absolute paths. It applies only to that checkout and
+  is not copied into separately created Git worktrees.
+
+Do not commit either personal configuration or absolute user paths. Use the block printed by the
+installer, or adapt the example:
 
 ```toml
 [mcp_servers.krita]
@@ -87,7 +98,10 @@ startup_timeout_sec = 10
 tool_timeout_sec = 210
 ```
 
-Restart Codex after changing its MCP configuration. The 210-second outer timeout allows the local
+Restart Codex after changing its MCP configuration, then call `krita_state` followed by
+`krita_preview` before productive work. If a task reports that `krita_state` is not registered,
+confirm that the task can see the selected configuration scope; for worktree-heavy use, prefer the
+user-level file. The 210-second outer timeout allows the local
 bridge to use 30 seconds for normal reads and edits, 120 seconds for document open/save, and 180
 seconds for KRA/PNG, layer, animation, tileset and region exports, plus response overhead.
 
