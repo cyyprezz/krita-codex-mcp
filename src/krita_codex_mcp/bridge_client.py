@@ -61,9 +61,10 @@ class BridgeClient:
                 "Accept": "application/json",
             },
         )
+        operation_timeout = self.config.timeout_for(request.operation, request.arguments)
         try:
             with self._opener.open(
-                http_request, timeout=self.config.request_timeout_seconds + 2.0
+                http_request, timeout=operation_timeout + 5.0
             ) as response:
                 body = response.read(self.config.max_response_bytes + 1)
         except urllib.error.HTTPError as exc:

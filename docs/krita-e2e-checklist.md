@@ -3,7 +3,8 @@
 These checks require a real Krita GUI and are intentionally not simulated in the offline test
 suite.
 
-The automated live helpers cover the normal flow plus wrong-token, missing-preset,
+Before each release, run all automated live helpers below against Krita 5.3.2.1. They cover the
+normal flow plus wrong-token, missing-preset,
 out-of-bounds, group-layer, overwrite and outside-root failures:
 
 ```powershell

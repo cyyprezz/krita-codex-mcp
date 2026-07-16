@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 from collections.abc import Mapping
 from typing import Any, Protocol
 
@@ -16,6 +15,7 @@ from .bridge_client import BridgeCallError
 from .color_service import ColorServiceMixin
 from .drawing_service import DrawingServiceMixin
 from .editing_service import EditingServiceMixin
+from .image_validation import validate_png_base64
 from .layer_service import LayerServiceMixin
 from .validation import (
     InputError,
@@ -100,16 +100,11 @@ class KritaService(
             )
         result = await self.client.execute("preview", arguments)
         png_base64 = result.pop("png_base64", None)
-        if not isinstance(png_base64, str):
-            raise BridgeCallError(
-                "INVALID_PREVIEW", "bridge response contains no PNG image", {}
-            )
-        try:
-            png_size = len(base64.b64decode(png_base64, validate=True))
-        except ValueError as exc:
-            raise BridgeCallError(
-                "INVALID_PREVIEW", "bridge returned malformed PNG base64", {}
-            ) from exc
+        png_size = validate_png_base64(
+            png_base64,
+            missing_message="bridge response contains no PNG image",
+            malformed_message="bridge returned malformed PNG base64",
+        )
         if png_size > self.config.preview_max_bytes:
             raise BridgeCallError(
                 "PREVIEW_TOO_LARGE", "preview exceeds configured byte limit", {}

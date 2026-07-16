@@ -5,7 +5,7 @@ authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listen
 `127.0.0.1`, validates a shared bearer token, and dispatches every Krita API call to Qt's main
 thread.
 
-This repository is a technical spike validated against Krita 5.3.2.1 on Windows. It deliberately
+This repository is a Windows-first integration validated against Krita 5.3.2.1. It deliberately
 exposes a small set of cohesive tools instead of a large collection of micro-tools:
 
 | Tool | Purpose |
@@ -32,6 +32,22 @@ Codex -> local STDIO MCP process -> authenticated 127.0.0.1 HTTP bridge
 The bridge has no arbitrary Python execution tool and no direct pixel painting fallback. Actual
 painting, shapes, replacement fills and correction filters go through native Krita actions or
 stroke APIs. If the installed Krita build lacks a required method, the operation fails closed.
+
+## Production workflow
+
+Use this order for a real Krita session:
+
+1. Run `scripts/install.ps1` with one or more narrow, writable allowed roots.
+2. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
+3. Restart Krita so the installed plugin and shared protocol package are loaded together.
+4. Run `scripts/check-installation.ps1` and require `Ready for productive use.`
+5. Only then start normal Codex work through the thirteen MCP tools above.
+
+The preflight checks the local config and token, installed files, MCP environment, loopback port,
+authentication and `krita_state`. It creates a disposable document, validates direct PNG preview
+bytes, exports a temporary PNG beneath an allowed root, closes the document and removes the file.
+It restores the previously active document and does not edit Codex configuration or contact an
+external service.
 
 ## Current status
 
@@ -88,6 +104,29 @@ Krita 5.3.2.1's Python binding requires integer `QPoint` values for `Node.paintL
 canvas coordinates are therefore rounded at the native API boundary. PNG export temporarily
 enables document batch mode so no format dialog can block the local bridge.
 
+## Timeouts and production guardrails
+
+Timeouts are operation-specific across Codex, the MCP `BridgeClient`, the local HTTP bridge and
+Qt's main-thread dispatcher:
+
+| Operation class | Dispatcher timeout |
+|---|---:|
+| Reads and normal edits | 30 seconds |
+| Document open and checkpoint save | 120 seconds |
+| KRA/PNG, layer, animation, tileset and region exports | 180 seconds |
+
+The recommended Codex `tool_timeout_sec` is 210 seconds so the MCP client can receive the bridge's
+structured result. If a timed-out Qt operation is already running, `operation_may_complete=true`
+is preserved and later calls receive `BRIDGE_BUSY` until Krita actually finishes.
+
+Keep `allowed_roots` as narrow as practical, keep ordinary versioned or manual KRA backups, and
+do not treat the bridge timeout as cancellation. The bridge is local-only and binds exactly to
+`127.0.0.1`.
+
+Before a release, run every live helper listed in the
+[Krita E2E checklist](docs/krita-e2e-checklist.md) against the supported Krita build. The offline
+CI does not start a Krita GUI.
+
 See [Windows installation](docs/windows-installation.md), [protocol](docs/protocol.md),
 [security](SECURITY.md), and the [Krita E2E checklist](docs/krita-e2e-checklist.md).
 
@@ -116,6 +155,7 @@ uv sync --all-groups --python 3.12
 $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\python.exe -m build
 ```
 
-No GitHub remote or publishing step is part of installation or development.
+Installation and development do not publish packages, commits or releases.

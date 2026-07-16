@@ -32,6 +32,8 @@ class BridgeConfig:
     host: str = "127.0.0.1"
     port: int = 17641
     request_timeout_seconds: float = 30.0
+    open_save_timeout_seconds: float = 120.0
+    export_timeout_seconds: float = 180.0
     max_request_bytes: int = 1_048_576
     max_response_bytes: int = 16_777_216
     preview_max_dimension: int = 2048
@@ -46,6 +48,14 @@ class BridgeConfig:
     @property
     def execute_url(self) -> str:
         return f"http://{self.host}:{self.port}/v1/execute"
+
+    def timeout_for(self, operation: str, arguments: Mapping[str, Any]) -> float:
+        """Return the Qt dispatch timeout for one bounded bridge operation."""
+        if operation in {"asset", "save_export"}:
+            return self.export_timeout_seconds
+        if operation == "document" and arguments.get("action") in {"open", "save"}:
+            return self.open_save_timeout_seconds
+        return self.request_timeout_seconds
 
     @classmethod
     def load(cls, path: Path | None = None) -> BridgeConfig:
@@ -86,6 +96,20 @@ class BridgeConfig:
 
         port = _bounded_int(raw, "port", 17641, minimum=1024, maximum=65535)
         timeout = _bounded_float(raw, "request_timeout_seconds", 30.0, minimum=1.0, maximum=120.0)
+        open_save_timeout = _bounded_float(
+            raw,
+            "open_save_timeout_seconds",
+            120.0,
+            minimum=max(timeout, 120.0),
+            maximum=300.0,
+        )
+        export_timeout = _bounded_float(
+            raw,
+            "export_timeout_seconds",
+            180.0,
+            minimum=max(open_save_timeout, 180.0),
+            maximum=600.0,
+        )
         max_request = _bounded_int(
             raw, "max_request_bytes", 1_048_576, minimum=4096, maximum=4_194_304
         )
@@ -134,6 +158,8 @@ class BridgeConfig:
             host=host,
             port=port,
             request_timeout_seconds=timeout,
+            open_save_timeout_seconds=open_save_timeout,
+            export_timeout_seconds=export_timeout,
             max_request_bytes=max_request,
             max_response_bytes=max_response,
             preview_max_dimension=preview_dimension,
@@ -153,6 +179,8 @@ class BridgeConfig:
             "port": self.port,
             "allowed_roots": [str(path) for path in self.allowed_roots],
             "request_timeout_seconds": self.request_timeout_seconds,
+            "open_save_timeout_seconds": self.open_save_timeout_seconds,
+            "export_timeout_seconds": self.export_timeout_seconds,
             "max_request_bytes": self.max_request_bytes,
             "max_response_bytes": self.max_response_bytes,
             "preview_max_dimension": self.preview_max_dimension,

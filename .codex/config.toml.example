@@ -2,4 +2,4 @@
 command = "C:\\absolute\\path\\krita-codex-mcp\\.venv\\Scripts\\krita-codex-mcp.exe"
 cwd = "C:\\absolute\\path\\krita-codex-mcp"
 startup_timeout_sec = 10
-tool_timeout_sec = 120
+tool_timeout_sec = 210

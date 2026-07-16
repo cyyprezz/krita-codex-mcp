@@ -1,83 +1,140 @@
 # Windows installation
 
+The supported production target is Krita 5.3.2.1 on Windows. Newer Krita builds remain
+feature-detected, but must complete the same preflight and live release checks before use.
+
 Prerequisites:
 
-- Krita 5.3.2.1 initially; newer builds remain feature-detected.
-- `uv` available on `PATH`.
-- A local Codex client (desktop app, CLI, or IDE extension).
+- Krita 5.3.2.1;
+- `uv` on `PATH`;
+- a local Codex desktop app, CLI or IDE extension;
+- one or more narrow local directories for KRA and export access.
 
-Clone the repository and run the installer:
+## 1. Install
+
+Clone the repository and run the local installer:
 
 ```powershell
 git clone https://github.com/cyyprezz/krita-codex-mcp.git
 Set-Location .\krita-codex-mcp
-```
-
-Then run:
-
-```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 `
   -AllowedRoot "C:\Users\you\Documents\Krita Work"
 ```
 
-The installer performs local-only setup:
+The installer creates `.venv`, installs the MCP package, stages a clean plugin and shared protocol
+package, swaps them into `%APPDATA%\krita\pykrita`, and writes the shared config beneath
+`%LOCALAPPDATA%\krita-codex-mcp`. Existing plugin files are replaced as a unit, so obsolete Python
+files cannot survive an update. If replacement fails, the installer restores its temporary
+backup where possible.
 
-1. creates `.venv` and installs the MCP package with `uv`;
-2. copies the Krita plugin and shared protocol into `%APPDATA%\krita\pykrita`;
-3. writes a random token and allowed roots to
-   `%LOCALAPPDATA%\krita-codex-mcp\config.json`;
-4. prints a Codex `config.toml` snippet, but does not edit Codex configuration itself.
+On repeat installation, a valid existing config and token are preserved. `-AllowedRoot` or
+`-Port` changes only those explicit settings. An invalid config is not silently replaced; repair
+it or use `-ResetConfig` deliberately to create a new token and config.
 
-Treat the config file as a secret because it contains the localhost bearer token. Do not commit
-it or paste it into chat.
+The installer never edits Codex configuration, commits files or contacts a service other than the
+Python package source used by `uv`.
 
-In Krita, open **Settings > Configure Krita > Python Plugin Manager**, enable **Krita Codex
-Bridge**, and restart Krita. The plugin starts only after it can read a valid shared config.
+## 2. Enable the Krita plugin
 
-Add the printed block to either `~/.codex/config.toml` or a trusted project's `.codex/config.toml`:
+In Krita, open **Settings > Configure Krita > Python Plugin Manager** and enable
+**Krita Codex Bridge**.
+
+## 3. Restart Krita
+
+Close and reopen Krita. A restart is required after install or update so the plugin and copied
+protocol package are loaded from the same version.
+
+## 4. Run the installation preflight
+
+With Krita running, execute:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\check-installation.ps1
+```
+
+The preflight is local-only. It validates the Windows config, token, absolute writable allowed
+roots, MCP executable, plugin and protocol files, loopback host, port and authentication. It then
+creates a disposable 64×64 document, runs `krita_state`, validates a direct PNG preview, exports a
+temporary PNG beneath the first allowed root, closes the document and removes the temporary file.
+If another document was active before the check, the script reactivates it during cleanup.
+
+A successful result ends with:
+
+```text
+Configuration: OK
+Plugin installation: OK
+Bridge: OK
+Authentication: OK
+MCP: OK
+Preview: OK
+Export: OK
+
+Ready for productive use.
+```
+
+On failure, the script prints the failed category, a concrete cause and a suggested fix, then
+returns a non-zero exit code. Do not start productive Codex work until all categories are `OK`.
+
+## 5. Configure Codex and start work
+
+Use the block printed by the installer, or adapt `.codex/config.toml.example`:
 
 ```toml
 [mcp_servers.krita]
 command = "C:\\absolute\\path\\krita-codex-mcp\\.venv\\Scripts\\krita-codex-mcp.exe"
 cwd = "C:\\absolute\\path\\krita-codex-mcp"
 startup_timeout_sec = 10
-tool_timeout_sec = 120
+tool_timeout_sec = 210
 ```
 
-Codex's desktop app, CLI and IDE extension share the same host MCP configuration. Restart the
-client after changing it, then inspect `/mcp` or the MCP server settings.
+Restart Codex after changing its MCP configuration. The 210-second outer timeout allows the local
+bridge to use 30 seconds for normal reads and edits, 120 seconds for document open/save, and 180
+seconds for KRA/PNG, layer, animation, tileset and region exports, plus response overhead.
 
-This repository includes `.codex/config.toml.example` for a project-scoped setup. Copy it to
-`.codex/config.toml` and replace the absolute paths. The active file is intentionally ignored by
-Git because those paths are specific to one Windows machine.
+If a running operation times out, it may still complete inside Krita. The bridge reports
+`operation_may_complete=true` and returns `BRIDGE_BUSY` to later calls until the original Qt
+operation really finishes. Do not immediately repeat a save or export against the same output.
 
-Start with `krita_state`. If it reports `BRIDGE_UNAVAILABLE`, verify that Krita is open, the
-plugin is enabled, both processes use the same Windows account/config file, and port 17641 is not
-already occupied.
+## Update and uninstall
 
-If no document is open, use `krita_document` with `action="create"` or `action="open"`. Opening is
-restricted to the same configured roots used for exports; Krita itself still needs to be running.
-
-## Live smoke tests
-
-Create or open a disposable 512×512 RGBA/U8 document in Krita. The first command creates layers,
-paints two native brush segments and writes a KRA plus PNG beneath the configured allowed root:
+Update from the current checkout without replacing the existing config or token:
 
 ```powershell
-$env:PYTHONPATH = "src"
-.\.venv\Scripts\python.exe .\scripts\live_e2e.py `
-  --output-dir "C:\absolute\allowed\root"
+powershell -ExecutionPolicy Bypass -File .\scripts\update.ps1
 ```
 
-Then verify the installed STDIO server and direct MCP image payload:
+Remove the installed plugin and copied protocol package while keeping config, token and `.venv`:
 
 ```powershell
-.\.venv\Scripts\python.exe .\scripts\live_expansion_e2e.py `
-  --output-dir "C:\absolute\allowed\root"
-.\.venv\Scripts\python.exe .\scripts\live_creation_e2e.py `
-  --output-dir "C:\absolute\allowed\root"
-.\.venv\Scripts\python.exe .\scripts\live_mcp_e2e.py
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
 
-The scripts never edit Codex configuration, commit files or contact GitHub. Live outputs should
-stay in the ignored `e2e-output` directory (or another disposable allowed root).
+Optional destructive switches are explicit:
+
+```powershell
+.\scripts\uninstall.ps1 -RemovePythonEnvironment
+.\scripts\uninstall.ps1 -RemoveConfig
+```
+
+Uninstall never traverses allowed roots and does not touch user images, KRA files or exports.
+
+## Production safety and Krita 5.3.2.1 limits
+
+- Configure the narrowest practical allowed roots. The bridge refuses input and output paths
+  outside them.
+- Keep normal KRA backups. The bridge adds safety guards but is not a version-control or backup
+  system.
+- Direct free layer transforms are not undoable through Krita 5.3.2.1's Python API. The bridge
+  creates hidden backup layers and blocks a second direct transform until save, close and reopen.
+- Transform masks are limited to three per open document; same-session mutation/removal and mixing
+  direct and mask transform backends are blocked because that Krita build is teardown-unstable.
+- `Node.paintLine` accepts integer `QPoint` values in this build, so public numeric coordinates are
+  rounded at the native boundary.
+- PNG export temporarily uses Krita batch mode to avoid format dialogs. Keep the UI responsive and
+  do not close Krita during a long export.
+
+## Release verification
+
+Offline CI runs unit tests, Ruff and package builds without a Krita GUI. Before a release, run all
+live scripts in [the Krita 5.3.2.1 E2E checklist](krita-e2e-checklist.md), including the direct
+bridge, expansion, editing, regions, creation, transform-mask and real MCP STDIO checks.

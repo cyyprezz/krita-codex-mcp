@@ -53,7 +53,27 @@ class BridgeClientTests(unittest.TestCase):
             )
         self.assertEqual(result, {"ready": True})
         self.assertEqual(observed["authorization"], f"Bearer {self.config.token}")
-        self.assertEqual(observed["timeout"], self.config.request_timeout_seconds + 2.0)
+        self.assertEqual(observed["timeout"], self.config.request_timeout_seconds + 5.0)
+
+    def test_uses_long_export_timeout(self) -> None:
+        from krita_codex_protocol import BridgeRequest
+
+        observed = {}
+        request = BridgeRequest(
+            operation="asset",
+            arguments={"action": "export_animation"},
+        )
+
+        def fake_urlopen(_request, timeout):
+            observed["timeout"] = timeout
+            response = BridgeResponse(request_id=request.request_id, result={"ready": True})
+            return _FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8"))
+
+        client = BridgeClient(self.config)
+        with patch.object(client._opener, "open", side_effect=fake_urlopen):
+            client._execute_sync(request)
+
+        self.assertEqual(observed["timeout"], self.config.export_timeout_seconds + 5.0)
 
     def test_rejects_mismatched_response(self) -> None:
         from krita_codex_protocol import BridgeRequest

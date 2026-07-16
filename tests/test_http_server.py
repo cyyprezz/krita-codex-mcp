@@ -5,6 +5,7 @@ import json
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from http.client import HTTPConnection
 from pathlib import Path
@@ -93,13 +94,19 @@ class HTTPServerTests(unittest.TestCase):
         connection.close()
         return status, payload
 
-    def _body(self, request_id: str | None = None) -> bytes:
+    def _body(
+        self,
+        request_id: str | None = None,
+        *,
+        operation: str = "state",
+        arguments: dict[str, Any] | None = None,
+    ) -> bytes:
         return json.dumps(
             {
                 "protocol_version": "1",
                 "request_id": request_id or str(uuid4()),
-                "operation": "state",
-                "arguments": {},
+                "operation": operation,
+                "arguments": arguments or {},
             }
         ).encode("utf-8")
 
@@ -115,6 +122,23 @@ class HTTPServerTests(unittest.TestCase):
         self.assertEqual(payload["request_id"], request_id)
         self.assertEqual(payload["result"], {"operation": "state"})
         self.assertEqual(len(dispatcher.calls), 1)
+        self.assertEqual(dispatcher.calls[0][1], server.config.request_timeout_seconds)
+
+    def test_long_export_uses_export_timeout(self) -> None:
+        dispatcher = _FakeDispatcher()
+        server = self._start_server(
+            dispatcher,
+            export_timeout_seconds=0.3,
+        )
+
+        status, payload = self._request(
+            server,
+            self._body(operation="asset", arguments={"action": "export_regions"}),
+        )
+
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(dispatcher.calls[0][1], 0.3)
 
     def test_wrong_token_is_rejected_before_dispatch(self) -> None:
         dispatcher = _FakeDispatcher()
@@ -139,13 +163,56 @@ class HTTPServerTests(unittest.TestCase):
         self.assertEqual(type_payload["error"]["code"], "UNSUPPORTED_MEDIA_TYPE")
         self.assertEqual(dispatcher.calls, [])
 
-    def test_oversized_request_is_rejected(self) -> None:
+    def test_reasonable_oversized_request_has_stable_structured_413_response(self) -> None:
         dispatcher = _FakeDispatcher()
         server = self._start_server(dispatcher, max_request_bytes=32)
 
-        status, payload = self._request(server, self._body())
+        for _ in range(10):
+            status, payload = self._request(server, self._body())
+
+            self.assertEqual(status, 413)
+            self.assertEqual(
+                payload,
+                {
+                    "ok": False,
+                    "error": {
+                        "code": "REQUEST_TOO_LARGE",
+                        "message": "Request exceeds configured limit",
+                    },
+                },
+            )
+        self.assertEqual(dispatcher.calls, [])
+
+    def test_minimal_oversize_above_maximum_configured_limit_is_drained(self) -> None:
+        dispatcher = _FakeDispatcher()
+        maximum_request_bytes = 4 * 1024 * 1024
+        server = self._start_server(
+            dispatcher,
+            max_request_bytes=maximum_request_bytes,
+            request_timeout_seconds=1.0,
+        )
+
+        status, payload = self._request(server, b"x" * (maximum_request_bytes + 1))
 
         self.assertEqual(status, 413)
+        self.assertEqual(payload["error"]["code"], "REQUEST_TOO_LARGE")
+        self.assertEqual(dispatcher.calls, [])
+
+    def test_absurd_announced_request_size_is_rejected_without_waiting_for_body(self) -> None:
+        dispatcher = _FakeDispatcher()
+        server = self._start_server(dispatcher, max_request_bytes=32)
+        connection = HTTPConnection("127.0.0.1", server.server_address[1], timeout=2.0)
+        connection.putrequest("POST", "/v1/execute")
+        connection.putheader("Authorization", f"Bearer {'t' * 32}")
+        connection.putheader("Content-Type", "application/json")
+        connection.putheader("Content-Length", str(10 * 1024 * 1024))
+        connection.endheaders()
+
+        response = connection.getresponse()
+        payload = json.loads(response.read().decode("utf-8"))
+        connection.close()
+
+        self.assertEqual(response.status, 413)
         self.assertEqual(payload["error"]["code"], "REQUEST_TOO_LARGE")
         self.assertEqual(dispatcher.calls, [])
 
@@ -164,7 +231,7 @@ class HTTPServerTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "RESPONSE_TOO_LARGE")
 
-    def test_running_timeout_retains_lock_until_completion(self) -> None:
+    def test_running_timeout_retains_lock_until_actual_completion_then_recovers(self) -> None:
         completion = threading.Event()
 
         def first_times_out(request):
@@ -189,7 +256,15 @@ class HTTPServerTests(unittest.TestCase):
         first_status, first_payload = self._request(server, self._body())
         busy_status, busy_payload = self._request(server, self._body())
         completion.set()
-        final_status, final_payload = self._request(server, self._body())
+        deadline = time.monotonic() + 2.0
+        while True:
+            final_status, final_payload = self._request(server, self._body())
+            if final_payload.get("ok") is True:
+                break
+            self.assertEqual(final_payload["error"]["code"], "BRIDGE_BUSY")
+            if time.monotonic() >= deadline:
+                self.fail("Bridge lock was not released after completion was signaled")
+            time.sleep(0.01)
 
         self.assertEqual(first_status, 200)
         self.assertEqual(first_payload["error"]["code"], "BRIDGE_TIMEOUT")

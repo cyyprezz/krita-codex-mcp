@@ -49,9 +49,16 @@ import/asset-size, document-size, point-count and timeout limits.
 `bridge_revision` counts successful mutations performed through this bridge instance. It is not
 a document revision and does not detect edits made manually in Krita or by another plugin.
 
-If a main-thread operation is still running when the request timeout expires, the bridge returns
+Timeout selection is shared by the MCP client and installed bridge protocol package. Normal reads
+and edits use `request_timeout_seconds` (30 seconds by default), `document.open` and
+`document.save` use `open_save_timeout_seconds` (120 seconds), and `asset` plus `save_export` use
+`export_timeout_seconds` (180 seconds). The MCP HTTP client waits five additional seconds for the
+structured bridge response; the outer Codex tool timeout should therefore be at least 210 seconds.
+
+If a main-thread operation is still running when its selected timeout expires, the bridge returns
 `BRIDGE_TIMEOUT` with `details.operation_may_complete` set to `true`. It keeps later operations
-serialized behind that call; they receive retryable `BRIDGE_BUSY` responses until completion.
+serialized behind that call; they receive retryable `BRIDGE_BUSY` responses until actual
+completion. An operation that had not begun before timeout reports `operation_may_complete=false`.
 
 `paint_path` accepts 2–512 points with canvas-space `x`, `y`, and pressure in the range 0–1. It
 uses one native `paintLine` call per adjacent pair. The response reports `undo_steps` explicitly;
@@ -77,6 +84,8 @@ document they used.
 document-projection region. Transparent outer margins remain part of the whole-canvas result.
 An explicit `x`, `y`, `width`, `height` region may be enlarged by an integer scale of 1–16 using
 nearest-neighbor sampling, while `max_width` and `max_height` remain hard output bounds.
+The MCP process base64-decodes preview and asset-preview responses, enforces configured byte
+limits and rejects any payload that does not begin with the eight-byte PNG signature.
 
 `canvas` supports `read`, `sample_color`, `resize`, `scale`, `crop`, `rotate`, `flip`, and
 `import_layer`. Color sampling reads one composited projection pixel and returns RGBA plus

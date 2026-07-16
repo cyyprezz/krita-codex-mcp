@@ -6,8 +6,11 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+from krita_codex_mcp.bridge_client import BridgeCallError
 from krita_codex_mcp.service import InputError, KritaService
 from krita_codex_protocol import BridgeConfig
+
+PNG_BASE64 = "iVBORw0KGgpwYXlsb2Fk"
 
 
 class _FakeClient:
@@ -22,7 +25,7 @@ class _FakeClient:
 def _asset_execute(client: _FakeClient):
     async def execute(operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         client.calls.append((operation, dict(arguments)))
-        return {"png_base64": "aGVsbG8=", "output": "ok"}
+        return {"png_base64": PNG_BASE64, "output": "ok"}
 
     return execute
 
@@ -65,7 +68,7 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             height=16,
             scale=8,
         )
-        self.assertEqual(png_base64, "aGVsbG8=")
+        self.assertEqual(png_base64, PNG_BASE64)
         self.assertEqual(metadata, {"output": "ok"})
         self.assertEqual(
             self.client.calls[-1],
@@ -85,6 +88,19 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(InputError, "requires x, y, width, and height"):
             await self.service.preview(256, 256, x=0, y=0, width=16)
         self.assertEqual(self.client.calls, [])
+
+    async def test_preview_rejects_base64_that_is_not_png(self) -> None:
+        async def invalid_preview(
+            operation: str, arguments: Mapping[str, Any]
+        ) -> dict[str, Any]:
+            self.client.calls.append((operation, dict(arguments)))
+            return {"png_base64": "aGVsbG8="}
+
+        self.client.execute = invalid_preview
+        with self.assertRaises(BridgeCallError) as raised:
+            await self.service.preview(64, 64)
+        self.assertEqual(raised.exception.code, "INVALID_PREVIEW")
+        self.assertIn("not a PNG", raised.exception.message)
 
     async def test_canvas_resize_normalizes_anchor_and_limits(self) -> None:
         await self.service.canvas(action="resize", width=320, height=180, anchor="bottom_right")
@@ -352,7 +368,7 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             preview_max_width=256,
             preview_max_height=128,
         )
-        self.assertEqual(png_base64, "aGVsbG8=")
+        self.assertEqual(png_base64, PNG_BASE64)
         self.assertEqual(metadata, {"output": "ok"})
         operation, arguments = self.client.calls[-1]
         self.assertEqual(operation, "asset")
@@ -368,6 +384,23 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
                 output_path=str(outside),
             )
         self.assertEqual(self.client.calls, [])
+
+    async def test_asset_export_rejects_preview_that_is_not_png(self) -> None:
+        async def invalid_asset(
+            operation: str, arguments: Mapping[str, Any]
+        ) -> dict[str, Any]:
+            self.client.calls.append((operation, dict(arguments)))
+            return {"png_base64": "aGVsbG8="}
+
+        self.client.execute = invalid_asset
+        with self.assertRaises(BridgeCallError) as raised:
+            await self.service.asset(
+                action="export_layer",
+                layer_id="layer-1",
+                output_path=str(self.root / "invalid-preview.png"),
+            )
+        self.assertEqual(raised.exception.code, "INVALID_PREVIEW")
+        self.assertIn("not a PNG", raised.exception.message)
 
     async def test_animation_export_normalizes_unity_package_options(self) -> None:
         target = self.root / "hero_idle"
@@ -388,7 +421,7 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             pixels_per_unit=32,
             loop=True,
         )
-        self.assertEqual(png_base64, "aGVsbG8=")
+        self.assertEqual(png_base64, PNG_BASE64)
         self.assertEqual(metadata, {"output": "ok"})
         operation, arguments = self.client.calls[-1]
         self.assertEqual(operation, "asset")
@@ -439,7 +472,7 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             package_name="Dungeon Tiles",
             pixels_per_unit=16,
         )
-        self.assertEqual(png_base64, "aGVsbG8=")
+        self.assertEqual(png_base64, PNG_BASE64)
         self.assertEqual(metadata, {"output": "ok"})
         operation, arguments = self.client.calls[-1]
         self.assertEqual(operation, "asset")
