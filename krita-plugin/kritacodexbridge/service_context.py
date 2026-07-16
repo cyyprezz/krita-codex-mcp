@@ -83,6 +83,13 @@ class ServiceContextMixin:
         action.trigger()
         doc.waitForDone()
 
+    @staticmethod
+    def _synchronize_projection(doc) -> None:
+        """Wait for queued work and for the projection refresh it schedules."""
+        doc.waitForDone()
+        doc.refreshProjection()
+        doc.waitForDone()
+
     def _encode_png_preview(self, image) -> bytes:
         payload = QByteArray()
         buffer = QBuffer(payload)

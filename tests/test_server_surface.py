@@ -160,6 +160,11 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
             layer_tool.inputSchema["properties"]["transform_mode"]["enum"],
             ["mask", "direct"],
         )
+        self.assertEqual(
+            layer_tool.inputSchema["properties"]["response_mode"]["enum"],
+            ["compact", "full"],
+        )
+        self.assertIn("checkpoint_reopen", layer_tool.inputSchema["properties"])
 
     async def test_document_targeting_and_checkpoint_are_exposed(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}

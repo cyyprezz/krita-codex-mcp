@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .transform_checkpoint import checkpoint_reopen_transform
 from .validation import InputError, bounded_int, finite_number, required_text
 
 SAFE_LAYER_BLENDING_MODES = {
@@ -52,6 +53,8 @@ class LayerServiceMixin:
         shear_y_degrees: float | None = None,
         direction: str | None = None,
         transform_mode: str = "mask",
+        response_mode: str = "compact",
+        checkpoint_reopen: bool = False,
     ) -> dict[str, Any]:
         actions = {
             "read",
@@ -76,6 +79,21 @@ class LayerServiceMixin:
                 "delete, reorder, translate, scale, rotate, shear, crop, flip, or merge_down"
             )
         arguments: dict[str, Any] = {"action": action}
+        if response_mode not in {"compact", "full"}:
+            raise InputError("response_mode must be compact or full")
+        if action != "read" and response_mode == "full":
+            arguments["response_mode"] = "full"
+        if not isinstance(checkpoint_reopen, bool):
+            raise InputError("checkpoint_reopen must be a boolean")
+        if checkpoint_reopen:
+            if action not in {"scale", "rotate", "shear", "crop"}:
+                raise InputError(
+                    "checkpoint_reopen is only supported for destructive transforms"
+                )
+            if action in {"scale", "rotate", "shear"} and transform_mode != "direct":
+                raise InputError("checkpoint_reopen requires transform_mode=direct")
+            if document_id is None:
+                raise InputError("checkpoint_reopen requires document_id")
         if document_id is not None:
             arguments["document_id"] = required_text(
                 document_id, "document_id", maximum=80
@@ -229,6 +247,8 @@ class LayerServiceMixin:
                         + ", ".join(sorted(SAFE_LAYER_BLENDING_MODES))
                     )
                 arguments["blending_mode"] = normalized_mode
+        if checkpoint_reopen:
+            return await checkpoint_reopen_transform(self.client, self.paths, arguments)
         return await self.client.execute("layers", arguments)
 
     @staticmethod

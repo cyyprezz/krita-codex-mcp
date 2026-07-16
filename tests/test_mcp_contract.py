@@ -25,6 +25,7 @@ class MCPContractTests(unittest.TestCase):
             "color_service.py",
             "editing_service.py",
             "layer_service.py",
+            "transform_checkpoint.py",
             "server_asset_tools.py",
             "server_common.py",
             "server_core_tools.py",
@@ -42,6 +43,7 @@ class MCPContractTests(unittest.TestCase):
             "drawing_service.py",
             "editing_service.py",
             "layer_service.py",
+            "transform_checkpoint.py",
         ):
             source = (MCP_ROOT / name).read_text(encoding="utf-8")
             self.assertNotIn("from .service import", source, name)

@@ -14,6 +14,7 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe .\scripts\live_editing_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_regions_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_creation_e2e.py --output-dir "C:\absolute\allowed\root"
+.\.venv\Scripts\python.exe .\scripts\live_reliability_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_transform_mask_e2e.py
 .\.venv\Scripts\python.exe .\scripts\live_mcp_e2e.py
 ```
@@ -29,6 +30,9 @@ $env:PYTHONPATH = "src"
    returned UUID remains stable and the UI updates without a cross-thread Qt warning.
    Duplicate and translate that layer, move it into a group, delete a disposable duplicate, then
    save/reopen the KRA and confirm names, nesting and positions persist.
+   Repeat the move into a newly created empty group and verify the source UUID is present under the
+   destination immediately and after save/reopen. Confirm mutation responses are compact by
+   default, while `response_mode=full` returns the recursive tree.
    Set lock, alpha lock, inherit alpha and a supported blending mode, and verify every returned
    property. Reject alpha lock on a group and an unknown blending mode without partial mutation.
    Merge two adjacent visible/unlocked paint layers, verify the projection stays pixel-identical,
@@ -36,6 +40,8 @@ $env:PYTHONPATH = "src"
 4. Run `krita_preview` at 256×256 and 1024×1024. Confirm Codex receives an image (not just a path),
    aspect ratio is preserved, and transparent areas remain transparent. Request a small projection
    region with integer scale and verify exact PNG dimensions and nearest-neighbor pixel blocks.
+   Toggle nested groups repeatedly and confirm each immediate preview matches the final settled
+   projection without transient black rectangles or missing body parts.
 5. Use `krita_brush` to search presets and set foreground, size, opacity, flow and pressure mode.
    Confirm the UI and returned state agree. Draw a two-point and multi-point pressure ramp with
    `krita_paint_path`. Confirm preset texture/dynamics are present and no soft-circle pixel
@@ -87,10 +93,15 @@ $env:PYTHONPATH = "src"
     restarted Krita process, exercise direct scale/rotate/shear/crop in separate disposable
     documents; each must return a hidden backup UUID. Confirm a second direct transform fails with
     `UNSAFE_TRANSFORM_SEQUENCE`, backend mixing fails with `UNSAFE_TRANSFORM_BACKEND_MIX`, and flip
-    remains one native Undo command.
+    remains one native Undo command. Save one disposable KRA and repeat two direct transforms with
+    `checkpoint_reopen=true` on the second call; confirm the response returns replacement
+    document/layer IDs and both changes persist after the separated bridge round trip.
 17. Draw a line, open and closed path, rectangle, ellipse and polygon through `krita_draw`. Verify
     native preset texture/dynamics, stroke/fill styles and one `Scripted Brush Stroke` Undo entry
-    per shape. Reject unsupported style names and malformed geometry before painting.
+    per shape. First create a completely empty paint layer and confirm the first shape produces
+    non-empty bounds plus `verified_content_change=true`. A forced native no-op must return
+    `DRAW_NO_CHANGE`, leave `bridge_revision` unchanged and not undo unrelated prior work. Reject
+    unsupported style names and malformed geometry before painting.
 18. Store a named project palette through `krita_color`, save, close and reopen the KRA, then read
     the same entries from the document annotation. List and read installed Krita palettes without
     mutating the global resources. Apply a project swatch and confirm the foreground changes.

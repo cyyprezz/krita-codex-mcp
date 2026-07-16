@@ -15,7 +15,7 @@ exposes a small set of cohesive tools instead of a large collection of micro-too
 | `krita_canvas` | Sample colors; resize, scale, crop, rotate or flip; import editable raster layers |
 | `krita_edit` | Create/refine/move selections; native copy, cut, paste, selection-to-layer, fill and clear |
 | `krita_document` | List, create, open, activate, checkpoint-save and explicitly close documents |
-| `krita_layers` | Read/edit the layer tree and transform layers by stable UUID |
+| `krita_layers` | Read/edit the layer tree, safely reparent, and transform layers by stable UUID |
 | `krita_history` | Read undo/redo state and execute bounded undo or redo steps |
 | `krita_brush` | Read/set native brush state and search installed Krita presets |
 | `krita_paint_path` | Pressure-aware line segments through Krita's native `Node.paintLine` API and active brush preset |
@@ -67,6 +67,9 @@ external service.
 - Offline unit, functional HTTP and contract tests cover protocol, path escapes, authentication,
   request limits, timeout/busy serialization, input validation and the absence of
   pixel/arbitrary-code painting.
+- Reliability contracts reject native draw calls that changed no pixels, verify layer reparenting
+  with a recovery copy, synchronize projections before previews, and keep mutation responses
+  compact unless the caller explicitly requests the full layer tree.
 - A live Windows run on Krita 5.3.2.1 verified state, direct PNG previews, stable layer UUIDs,
   pressure-aware native painting, two undo steps for two segments, dialog-free KRA/PNG output,
   authentication failure and allowed-root enforcement.
@@ -96,8 +99,10 @@ external service.
   document project palette that survived save/close/reopen. Free layer scale/rotate/shear/crop are
   not undoable in Krita 5.3.2.1's Python API, so each creates a hidden backup layer and returns its
   UUID. Because two direct node transforms in one open document crash that Krita build during
-  teardown, a second is rejected until the KRA is saved, closed and reopened. Native layer mirror
-  remains one normal Undo step and does not count toward that guard.
+  teardown, a second is rejected until the KRA is saved, closed and reopened. Direct callers may
+  set `checkpoint_reopen=true` to perform that bounded KRA round trip inside `krita_layers` and
+  receive the replacement document/layer IDs. Native layer mirror remains one normal Undo step
+  and does not count toward that guard.
 - The transform-mask live run verified non-destructive scale, rotate and shear on one asymmetric
   transparent layer. Each operation created a native `transformmask`, changed the direct PNG
   preview, survived a KRA save/close/reopen round trip with stable UUIDs, and could then be removed

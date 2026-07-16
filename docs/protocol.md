@@ -84,6 +84,8 @@ document they used.
 document-projection region. Transparent outer margins remain part of the whole-canvas result.
 An explicit `x`, `y`, `width`, `height` region may be enlarged by an integer scale of 1–16 using
 nearest-neighbor sampling, while `max_width` and `max_height` remain hard output bounds.
+Before reading projection pixels, the plugin waits for queued work, requests a projection refresh,
+and waits again so visibility/reorder mutations cannot race the preview render.
 The MCP process base64-decodes preview and asset-preview responses, enforces configured byte
 limits and rejects any payload that does not begin with the eight-byte PNG signature.
 
@@ -112,11 +114,15 @@ mask changes increment `bridge_revision`, but are not presented as document-cont
 reads or sets the native preset, size, opacity, flow, rotation, eraser/pressure state and managed
 foreground color; preset listing is filtered and capped.
 
-`layers` returns a bottom-to-top recursive tree with stable UUIDs, parent UUIDs, sibling indices,
-canvas positions and content bounds. In addition to create/activate/rename/properties, it supports
-native duplication, deletion, translation and reparenting/reordering. `reorder` moves to the root
-when `parent_id` is omitted; `above_id` optionally names a direct child of the destination and an
-omitted `above_id` inserts at the bottom. Cycles and non-group destinations fail closed.
+`layers` read calls return a bottom-to-top recursive tree with stable UUIDs, parent UUIDs, sibling
+indices, canvas positions and content bounds. Mutations default to `response_mode="compact"` and
+return only the affected layer summary; `response_mode="full"` opts back into the recursive tree.
+In addition to create/activate/rename/properties, the operation supports native duplication,
+deletion, translation and reparenting/reordering. `reorder` moves to the root when `parent_id` is
+omitted; `above_id` optionally names a direct child of the destination and an omitted `above_id`
+inserts at the bottom. Cycles and non-group destinations fail closed. Reparenting creates a
+detached recovery copy before mutation, verifies the destination parent by UUID after Krita
+finishes, and restores either the original or its recovery copy if Libkis reports false success.
 Layer properties include visibility, opacity, lock, paint-layer alpha lock, alpha inheritance and
 a conservative allow-list of stable Krita blending-mode IDs. Multi-property changes are verified
 through getters and rolled back if Krita rejects any field. `merge_down` is intentionally limited
@@ -143,17 +149,27 @@ and shear, three distinct preview hashes, stable mask UUIDs after reopen, and so
 Scale strategies are checked against the running Krita build. Krita 5.3.2.1 does not put direct
 `Node.scaleNode`, `rotateNode`, `shearNode`, or `cropNode` calls on its Undo stack, so each creates a
 hidden full-layer backup and returns `backup_layer_id`. A second direct transform in one open
-document fails with `UNSAFE_TRANSFORM_SEQUENCE`. Direct and mask layer-transform backends also may
-not be mixed in one Krita process, and direct mode is rejected while the target document contains
-transform masks. `UNSAFE_TRANSFORM_BACKEND_MIX` requires using mask mode, safely removing masks, or
-saving all documents and restarting Krita. Mirror uses `mirrorNodeX/Y`, reports one native Undo
-step, and is exempt from both backend guards.
+document fails with `UNSAFE_TRANSFORM_SEQUENCE`. For a saved KRA beneath an allowed root,
+`checkpoint_reopen=true` requires an explicit `document_id` and makes the MCP process checkpoint,
+close and reopen the KRA through separate bridge requests, with a bounded Qt settling interval
+between them. It verifies the stable layer UUID before transforming and returns both old and
+replacement document/layer IDs. Keeping
+the close/open phases out of one Qt-main-thread callback avoids Krita's delayed layer-docker update
+crash. Direct and mask layer-transform backends still may not be mixed in one Krita process, and
+direct mode is rejected while the target document contains transform masks.
+`UNSAFE_TRANSFORM_BACKEND_MIX` requires using mask mode, safely removing masks, or saving all
+documents and restarting Krita. Mirror uses `mirrorNodeX/Y`, reports one native Undo step, and is
+exempt from both backend guards.
 
 `draw` is a cohesive native-shape operation over `Node.paintLine`, `paintPath`, `paintPolygon`,
 `paintRectangle`, and `paintEllipse`. It accepts explicit foreground/background stroke and fill
 styles, optional preset and brush size, open or closed paths, and pressure for line endpoints.
-Every successful call is one scripted-brush Undo step. The existing `paint_path` remains the
-pressure-aware multi-segment API and reports one step per segment.
+Every successful call is one scripted-brush Undo step and includes
+`verified_content_change=true`. On an initially empty layer, bounds/extents must become non-empty;
+on an existing layer, bounded target pixels are hashed before and after. A native call that changes
+neither pixels nor bounds fails with `DRAW_NO_CHANGE` and does not risk undoing an unrelated prior
+action. The existing `paint_path` remains the pressure-aware multi-segment API and reports one step
+per segment.
 
 `color` can list/read installed Krita palettes and apply a swatch to foreground or background.
 It also stores up to 256 named `#RRGGBB[AA]` entries as a private document annotation, so the

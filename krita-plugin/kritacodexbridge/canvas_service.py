@@ -70,7 +70,7 @@ class CanvasOperationsMixin:
                 )
             width, height = _fit_size(doc.width(), doc.height(), max_width, max_height)
             source_rect = QRect(0, 0, int(doc.width()), int(doc.height()))
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
             image = doc.projection(
                 source_rect.x(),
                 source_rect.y(),
@@ -95,7 +95,7 @@ class CanvasOperationsMixin:
                 raise KritaOperationError(
                     "PREVIEW_TOO_LARGE", "Preview region exceeds the configured pixel limit"
                 )
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
             image = doc.projection(
                 source_rect.x(),
                 source_rect.y(),
@@ -162,7 +162,7 @@ class CanvasOperationsMixin:
         if action == "sample_color":
             x = _bounded_int(arguments.get("x"), "x", 0, int(doc.width()) - 1)
             y = _bounded_int(arguments.get("y"), "y", 0, int(doc.height()) - 1)
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
             image = doc.projection(x, y, 1, 1)
             if image is None or image.isNull():
                 raise KritaOperationError(

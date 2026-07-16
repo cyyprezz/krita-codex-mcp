@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import math
 from collections.abc import Mapping
 from typing import Any
 
 from krita import Krita, ManagedColor
-from PyQt5.QtCore import QPoint, QPointF, QRectF
+from PyQt5.QtCore import QPoint, QPointF, QRect, QRectF
 from PyQt5.QtGui import QPainterPath
 
 from ._service_helpers import (
@@ -17,6 +19,7 @@ from .errors import KritaOperationError
 
 
 class DrawingOperationsMixin:
+    _DRAW_VERIFY_MAX_PIXELS = 4_194_304
     _DRAW_SHAPES = {"line", "path", "rectangle", "ellipse", "polygon"}
     _STROKE_STYLES = {"None", "ForegroundColor", "BackgroundColor"}
     _FILL_STYLES = {"None", "ForegroundColor", "BackgroundColor"}
@@ -92,6 +95,19 @@ class DrawingOperationsMixin:
                 view.setForeGroundColor(foreground)
             if background is not None:
                 view.setBackGroundColor(background)
+            self._synchronize_projection(doc)
+            verification_rect = self._draw_verification_rect(
+                doc,
+                node,
+                shape,
+                points,
+                rect,
+                brush_size=float(view.brushSize()),
+                include_stroke=stroke_style != "None",
+            )
+            before = self._draw_content_snapshot(
+                node, verification_rect, capture_pixels=None
+            )
             self._paint_shape(
                 node,
                 shape,
@@ -102,9 +118,39 @@ class DrawingOperationsMixin:
                 bool(arguments.get("closed", False)),
             )
             completed = 1
-            doc.waitForDone()
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
+            after = self._draw_content_snapshot(
+                node,
+                verification_rect,
+                capture_pixels=bool(before["has_extents"]),
+            )
+            if not self._draw_snapshot_changed(before, after):
+                self._restore_draw_state(view, previous, doc, previous_node)
+                raise KritaOperationError(
+                    "DRAW_NO_CHANGE",
+                    "Krita completed the native draw call without changing target pixels or bounds",
+                    {
+                        "document_id": self._document_id(doc),
+                        "layer_id": self._node_id(node),
+                        "layer_type": node.type(),
+                        "paint_ability": paint_ability,
+                        "locked": bool(_safe_call(node, "locked", default=False)),
+                        "writable": paint_ability in {None, "PAINT"},
+                        "verification_rect": self._draw_rect_mapping(verification_rect),
+                        "before_bounds": before["bounds"],
+                        "after_bounds": after["bounds"],
+                        "before_has_extents": before["has_extents"],
+                        "after_has_extents": after["has_extents"],
+                        "undo_attempted": False,
+                        "reason": "native painting API produced no observable layer-content change",
+                    },
+                )
         except Exception as exc:
+            if isinstance(exc, KritaOperationError) and exc.code == "DRAW_NO_CHANGE":
+                raise
+            if isinstance(exc, KritaOperationError) and completed == 0:
+                self._restore_draw_state(view, previous, doc, previous_node)
+                raise
             rolled_back = self._undo_segments(completed, doc)
             self._restore_draw_state(view, previous, doc, previous_node)
             if rolled_back != completed:
@@ -129,7 +175,109 @@ class DrawingOperationsMixin:
             "undo_steps": 1,
             "undo_behavior": "one Krita undo step for the native shape",
             "native_brush_engine": True,
+            "verified_content_change": True,
         }
+
+    def _draw_content_snapshot(self, node, rect, *, capture_pixels):
+        bounds = node.bounds()
+        bounds_mapping = self._draw_rect_mapping(bounds)
+        has_extents = bool(
+            _safe_call(
+                node,
+                "hasExtents",
+                default=bounds_mapping["width"] > 0 and bounds_mapping["height"] > 0,
+            )
+        )
+        if capture_pixels is None:
+            capture_pixels = has_extents
+        digest = None
+        if capture_pixels:
+            pixels = int(rect.width()) * int(rect.height())
+            if pixels > self._DRAW_VERIFY_MAX_PIXELS:
+                raise KritaOperationError(
+                    "DRAW_VERIFICATION_TOO_LARGE",
+                    "The affected area is too large to verify safely on a non-empty layer",
+                    {
+                        "pixels": pixels,
+                        "limit": self._DRAW_VERIFY_MAX_PIXELS,
+                        "recovery": (
+                            "split the shape into smaller operations or draw on an empty layer"
+                        ),
+                    },
+                )
+            payload = bytes(
+                node.pixelData(
+                    int(rect.x()),
+                    int(rect.y()),
+                    int(rect.width()),
+                    int(rect.height()),
+                )
+            )
+            digest = hashlib.sha256(payload).hexdigest()
+        return {
+            "has_extents": has_extents,
+            "bounds": bounds_mapping,
+            "pixel_digest": digest,
+        }
+
+    @staticmethod
+    def _draw_snapshot_changed(before, after) -> bool:
+        if before["bounds"] != after["bounds"]:
+            return True
+        if not before["has_extents"]:
+            return bool(after["has_extents"])
+        return before["pixel_digest"] != after["pixel_digest"]
+
+    @staticmethod
+    def _draw_rect_mapping(rect) -> dict[str, int]:
+        return {
+            "x": int(rect.x()),
+            "y": int(rect.y()),
+            "width": int(rect.width()),
+            "height": int(rect.height()),
+        }
+
+    def _draw_verification_rect(
+        self,
+        doc,
+        node,
+        shape,
+        points,
+        rect,
+        *,
+        brush_size: float,
+        include_stroke: bool,
+    ):
+        if shape in {"rectangle", "ellipse"}:
+            left = float(rect.x())
+            top = float(rect.y())
+            right = left + float(rect.width())
+            bottom = top + float(rect.height())
+        else:
+            xs = [float(point[0]) for point in points]
+            ys = [float(point[1]) for point in points]
+            left, right = min(xs), max(xs)
+            top, bottom = min(ys), max(ys)
+        margin = max(2, math.ceil(brush_size)) if include_stroke else 1
+        left_i = math.floor(left) - margin
+        top_i = math.floor(top) - margin
+        right_i = math.ceil(right) + margin
+        bottom_i = math.ceil(bottom) + margin
+        canvas_rect = QRect(0, 0, int(doc.width()), int(doc.height()))
+        affected = QRect(
+            left_i,
+            top_i,
+            max(1, right_i - left_i + 1),
+            max(1, bottom_i - top_i + 1),
+        ).intersected(canvas_rect)
+        if affected.isEmpty():
+            raise KritaOperationError(
+                "INVALID_ARGUMENT", "The requested shape does not intersect the canvas"
+            )
+        existing_bounds = node.bounds().intersected(canvas_rect)
+        if not existing_bounds.isEmpty():
+            affected = affected.united(existing_bounds)
+        return affected
 
     def _shape_points(self, arguments, doc, shape: str):
         if shape not in {"line", "path", "polygon"}:
