@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -44,6 +45,13 @@ class _FakeBridgeAPI:
 
 class InstallerPreflightTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Preflight payload tests do not own the machine's productive bridge port.
+        self.reservation_patch = patch(
+            "krita_codex_mcp.installer.manager.BridgePortReservation",
+            side_effect=lambda _ports: nullcontext(),
+        )
+        self.reservation_patch.start()
+        self.addCleanup(self.reservation_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
         self.allowed = root / "allowed"

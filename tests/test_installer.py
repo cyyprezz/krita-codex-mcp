@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,14 @@ from krita_codex_mcp.installer.transaction import SwapComponent
 
 class InstallerTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Real socket semantics are covered by test_installer_ports; transaction tests must not
+        # contend with a productive local Krita bridge.
+        self.reservation_patch = patch(
+            "krita_codex_mcp.installer.manager.BridgePortReservation",
+            side_effect=lambda _ports: nullcontext(),
+        )
+        self.reservation_patch.start()
+        self.addCleanup(self.reservation_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.allowed = self.root / "allowed"
@@ -26,6 +35,7 @@ class InstallerTests(unittest.TestCase):
             "USERPROFILE": str(self.root / "profile"),
         }
         self.paths = InstallPaths.from_environment(environment)
+
     def tearDown(self) -> None:
         self.temp.cleanup()
 

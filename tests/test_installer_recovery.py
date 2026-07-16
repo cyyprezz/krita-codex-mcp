@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,13 @@ from krita_codex_mcp.installer.transaction import (
 
 class InstallerCrashRecoveryTests(unittest.TestCase):
     def setUp(self) -> None:
+        # Crash fixtures exercise journal recovery independently of the dedicated socket tests.
+        self.reservation_patch = patch(
+            "krita_codex_mcp.installer.manager.BridgePortReservation",
+            side_effect=lambda _ports: nullcontext(),
+        )
+        self.reservation_patch.start()
+        self.addCleanup(self.reservation_patch.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.allowed = self.root / "allowed"

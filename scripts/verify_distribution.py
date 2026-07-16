@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import tarfile
 import zipfile
 from pathlib import Path
 
 PAYLOAD_PREFIXES = ("krita_codex_mcp/", "krita_codex_protocol/")
+MCP_REGISTRY_MARKER = "mcp-name: io.github.cyyprezz/krita-codex-mcp"
 
 
 def wheel_payload(path: Path) -> dict[str, bytes]:
@@ -75,11 +77,17 @@ def verify_wheel(path: Path) -> None:
     entry_points = [name for name in names if name.endswith(".dist-info/entry_points.txt")]
     if len(entry_points) != 1:
         raise RuntimeError("Wheel must contain exactly one entry_points.txt file")
+    metadata_files = [name for name in names if name.endswith(".dist-info/METADATA")]
+    if len(metadata_files) != 1:
+        raise RuntimeError("Wheel must contain exactly one METADATA file")
     with zipfile.ZipFile(path) as archive:
         scripts = archive.read(entry_points[0]).decode("utf-8")
+        metadata = archive.read(metadata_files[0]).decode("utf-8")
     for command in ("krita-codex-mcp", "krita-codex-install"):
         if command not in scripts:
             raise RuntimeError(f"Wheel entry point is missing: {command}")
+    if MCP_REGISTRY_MARKER not in metadata:
+        raise RuntimeError("Wheel metadata is missing the MCP Registry ownership marker")
 
 
 def verify_sdist(path: Path) -> None:
@@ -103,6 +111,7 @@ def verify_sdist(path: Path) -> None:
         "krita-plugin/kritacodexbridge/extension.py",
         "krita-plugin/kritacodexbridge.desktop",
         "scripts/install.ps1",
+        "server.json",
         "src/krita_codex_mcp/installer/cli.py",
         "src/krita_codex_protocol/messages.py",
     }
@@ -112,6 +121,29 @@ def verify_sdist(path: Path) -> None:
     forbidden = [name for name in names if "__pycache__" in name or name.endswith(".token")]
     if forbidden:
         raise RuntimeError(f"Source distribution contains forbidden entries: {forbidden}")
+    with tarfile.open(path, "r:gz") as archive:
+        readme_members = [
+            member
+            for member in archive.getmembers()
+            if member.isfile() and member.name.endswith("/README.md")
+        ]
+        server_members = [
+            member
+            for member in archive.getmembers()
+            if member.isfile() and member.name.endswith("/server.json")
+        ]
+        if len(readme_members) != 1 or len(server_members) != 1:
+            raise RuntimeError(
+                "Source distribution must contain one README.md and one server.json"
+            )
+        readme_file = archive.extractfile(readme_members[0])
+        server_file = archive.extractfile(server_members[0])
+        readme = readme_file.read().decode("utf-8") if readme_file is not None else ""
+        server = json.loads(server_file.read()) if server_file is not None else {}
+    if MCP_REGISTRY_MARKER not in readme:
+        raise RuntimeError("Source distribution README is missing the MCP Registry marker")
+    if server.get("name") != "io.github.cyyprezz/krita-codex-mcp":
+        raise RuntimeError("Source distribution server.json has the wrong MCP Registry name")
 
 
 def main() -> None:
