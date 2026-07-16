@@ -14,19 +14,20 @@ from ._service_helpers import (
 )
 from .errors import KritaOperationError
 
+_SAFE_FILTERS = {
+    "autocontrast",
+    "brightnesscontrast",
+    "desaturate",
+    "hsvadjustment",
+    "invert",
+    "levels",
+    "normalize",
+}
+_REPLACE_MAX_PIXELS = 4_194_304
+
 
 class ColorOperationsMixin:
     _PROJECT_PALETTE_ANNOTATION = "krita-codex-project-palette"
-    _SAFE_FILTERS = {
-        "autocontrast",
-        "brightnesscontrast",
-        "desaturate",
-        "hsvadjustment",
-        "invert",
-        "levels",
-        "normalize",
-    }
-    _REPLACE_MAX_PIXELS = 4_194_304
     _PROJECT_PALETTE_MAX_BYTES = 65_536
 
     def color(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -61,7 +62,7 @@ class ColorOperationsMixin:
         view = self._active_view()
         configurations = {}
         app = Krita.instance()
-        for name in sorted(self._SAFE_FILTERS):
+        for name in sorted(_SAFE_FILTERS):
             filter_object = app.filter(name)
             if filter_object is None:
                 continue

@@ -41,7 +41,16 @@ Use this order for a real Krita session:
 2. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
 3. Restart Krita so the installed plugin and shared protocol package are loaded together.
 4. Run `scripts/check-installation.ps1` and require `Ready for productive use.`
-5. Only then start normal Codex work through the thirteen MCP tools above.
+5. Add the MCP block printed by the installer to your Codex configuration.
+6. Restart Codex, verify `krita_state` and `krita_preview`, and only then start normal work.
+
+For a personal installation, put the block in the user-level
+`C:\Users\<you>\.codex\config.toml`. This is the recommended option because the server is then
+available to all local Codex tasks and Git worktrees. A trusted checkout may instead use
+`.codex/config.toml`, but that machine-specific file is intentionally ignored by Git and is not
+copied into new worktrees. Never commit a configuration containing personal absolute paths. See
+the [Windows installation guide](docs/windows-installation.md#5-configure-codex-and-start-work)
+for the exact block and both scopes.
 
 The preflight checks the local config and token, installed files, MCP environment, loopback port,
 authentication and `krita_state`. It creates a disposable document, validates direct PNG preview
@@ -128,7 +137,8 @@ Before a release, run every live helper listed in the
 CI does not start a Krita GUI.
 
 See [Windows installation](docs/windows-installation.md), [protocol](docs/protocol.md),
-[security](SECURITY.md), and the [Krita E2E checklist](docs/krita-e2e-checklist.md).
+[security](SECURITY.md), [service mixin contracts](docs/service-mixin-contracts.md), and the
+[Krita E2E checklist](docs/krita-e2e-checklist.md).
 
 ## License
 
