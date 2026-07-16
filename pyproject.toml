@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "krita-codex-mcp"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Windows-first local MCP bridge for reliable Krita control from Codex"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -21,6 +21,7 @@ Issues = "https://github.com/cyyprezz/krita-codex-mcp/issues"
 
 [project.scripts]
 krita-codex-mcp = "krita_codex_mcp.server:main"
+krita-codex-install = "krita_codex_mcp.installer.cli:main"
 
 [dependency-groups]
 dev = [
@@ -30,6 +31,12 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/krita_codex_mcp", "src/krita_codex_protocol"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"krita-plugin" = "krita_codex_mcp/_resources/krita_plugin"
+
+[tool.hatch.version]
+path = "src/krita_codex_mcp/__init__.py"
 
 [tool.hatch.build.targets.sdist]
 include = [

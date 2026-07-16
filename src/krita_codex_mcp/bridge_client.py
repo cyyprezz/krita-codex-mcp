@@ -8,7 +8,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from krita_codex_mcp import __version__
 from krita_codex_protocol import (
+    PROTOCOL_VERSION,
     BridgeConfig,
     BridgeRequest,
     BridgeResponse,
@@ -127,4 +129,17 @@ class BridgeClient:
                 response.error.details,
                 response.error.retryable,
             )
-        return dict(response.result or {})
+        result = dict(response.result or {})
+        if result.get("bridge_distribution_version") != __version__:
+            raise BridgeCallError(
+                "BRIDGE_VERSION_MISMATCH",
+                "The bridge loaded in Krita does not match this MCP server version",
+                {},
+            )
+        if result.get("bridge_protocol_version") != PROTOCOL_VERSION:
+            raise BridgeCallError(
+                "BRIDGE_PROTOCOL_MISMATCH",
+                "The bridge loaded in Krita uses an incompatible protocol version",
+                {},
+            )
+        return result

@@ -8,8 +8,17 @@ import urllib.error
 import urllib.request
 from unittest.mock import patch
 
+from krita_codex_mcp import __version__
 from krita_codex_mcp.bridge_client import BridgeCallError, BridgeClient
-from krita_codex_protocol import BridgeConfig, BridgeResponse
+from krita_codex_protocol import PROTOCOL_VERSION, BridgeConfig, BridgeResponse
+
+
+def _versioned_result(**values):
+    return {
+        **values,
+        "bridge_distribution_version": __version__,
+        "bridge_protocol_version": PROTOCOL_VERSION,
+    }
 
 
 class _FakeHTTPResponse:
@@ -43,7 +52,9 @@ class BridgeClientTests(unittest.TestCase):
             observed["authorization"] = request.headers["Authorization"]
             observed["timeout"] = timeout
             raw = json.loads(request.data.decode("utf-8"))
-            response = BridgeResponse(request_id=raw["request_id"], result={"ready": True})
+            response = BridgeResponse(
+                request_id=raw["request_id"], result=_versioned_result(ready=True)
+            )
             return _FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8"))
 
         client = BridgeClient(self.config)
@@ -51,7 +62,7 @@ class BridgeClientTests(unittest.TestCase):
             result = client._execute_sync(
                 __import__("krita_codex_protocol").BridgeRequest(operation="state", arguments={})
             )
-        self.assertEqual(result, {"ready": True})
+        self.assertEqual(result, _versioned_result(ready=True))
         self.assertEqual(observed["authorization"], f"Bearer {self.config.token}")
         self.assertEqual(observed["timeout"], self.config.request_timeout_seconds + 5.0)
 
@@ -66,7 +77,9 @@ class BridgeClientTests(unittest.TestCase):
 
         def fake_urlopen(_request, timeout):
             observed["timeout"] = timeout
-            response = BridgeResponse(request_id=request.request_id, result={"ready": True})
+            response = BridgeResponse(
+                request_id=request.request_id, result=_versioned_result(ready=True)
+            )
             return _FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8"))
 
         client = BridgeClient(self.config)
@@ -89,6 +102,28 @@ class BridgeClientTests(unittest.TestCase):
                 return_value=_FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8")),
             ),
             self.assertRaisesRegex(BridgeCallError, "RESPONSE_MISMATCH"),
+        ):
+            client._execute_sync(request)
+
+    def test_rejects_mismatched_loaded_bridge_version(self) -> None:
+        from krita_codex_protocol import BridgeRequest
+
+        request = BridgeRequest(operation="state", arguments={})
+        response = BridgeResponse(
+            request_id=request.request_id,
+            result={
+                "bridge_distribution_version": "0.0.0",
+                "bridge_protocol_version": PROTOCOL_VERSION,
+            },
+        )
+        client = BridgeClient(self.config)
+        with (
+            patch.object(
+                client._opener,
+                "open",
+                return_value=_FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8")),
+            ),
+            self.assertRaisesRegex(BridgeCallError, "BRIDGE_VERSION_MISMATCH"),
         ):
             client._execute_sync(request)
 

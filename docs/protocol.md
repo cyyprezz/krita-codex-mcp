@@ -214,6 +214,8 @@ Region output uses the same staged, schema-gated transaction as animation output
 region packages cannot overwrite one another, symbolic managed paths fail closed, only known
 generated files are replaced and Unity `.meta` files remain untouched.
 
-The canonical dependency-free protocol package is `src/krita_codex_protocol`. The Windows
-installer copies that same package next to the Krita plugin, so the two processes use the same
-validation code rather than hand-maintained wire-model duplicates.
+The canonical dependency-free protocol package is `src/krita_codex_protocol`. The wheel-native
+Windows installer copies that exact package from the running distribution next to the bundled
+Krita plugin. A generated relative-path hash manifest and runtime version fields let preflight
+verify that the MCP process, installed payload and code actually loaded in Krita use the same
+distribution and wire-protocol versions without hand-maintained wire-model duplicates.

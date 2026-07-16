@@ -1,136 +1,166 @@
 # Windows installation
 
-The supported production target is Krita 5.3.2.1 on Windows. Newer Krita builds remain
-feature-detected, but must complete the same preflight and live release checks before use.
+The supported production target is Krita 5.3.2.1 on Windows. The Python wheel contains the
+STDIO MCP server, the dependency-free shared protocol package, the complete Krita plugin and the
+wheel-native installation manager. A Git checkout is not required for a package installation.
 
 Prerequisites:
 
 - Krita 5.3.2.1;
-- `uv` on `PATH`;
+- `uv` and `uvx` on `PATH`;
 - a local Codex desktop app, CLI or IDE extension;
 - one or more narrow local directories for KRA and export access.
 
-## 1. Install
+The examples below use version `0.1.0`. Replace it with the exact wheel version being installed.
+Until the package is published, use a locally built wheel path in `--from`; do not substitute an
+unpublished PyPI name.
 
-Clone the repository and run the local installer:
+## 1. Install from a wheel
+
+A new package installation requires at least one explicit allowed root. There is no implicit
+Documents default:
 
 ```powershell
-git clone https://github.com/cyyprezz/krita-codex-mcp.git
-Set-Location .\krita-codex-mcp
-powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 `
-  -AllowedRoot "C:\Users\you\Documents\Krita Work"
+uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
+  krita-codex-install install `
+  --allowed-root "C:\Krita Work"
 ```
 
-The installer creates `.venv`, installs the MCP package, stages a clean plugin and shared protocol
-package, swaps them into `%APPDATA%\krita\pykrita`, and writes the shared config beneath
-`%LOCALAPPDATA%\krita-codex-mcp`. Existing plugin files are replaced as a unit, so obsolete Python
-files cannot survive an update. If replacement fails, the installer restores its temporary
-backup where possible.
+Once the same wheel is available from PyPI, the checkout-free form is:
 
-On repeat installation, a valid existing config and token are preserved. `-AllowedRoot` or
-`-Port` changes only those explicit settings. An invalid config is not silently replaced; repair
-it or use `-ResetConfig` deliberately to create a new token and config.
+```powershell
+uvx --from "krita-codex-mcp==0.1.0" `
+  krita-codex-install install `
+  --allowed-root "C:\Krita Work"
+```
 
-The installer never edits Codex configuration, commits files or contacts a service other than the
-Python package source used by `uv`.
+The installer stages the bundled plugin, desktop descriptor, shared protocol and generated
+hash manifest beneath `%APPDATA%\krita\pykrita`. It validates the complete stage, swaps each
+component transactionally and restores the previous installation if any step fails. Configuration
+is stored beneath `%LOCALAPPDATA%\krita-codex-mcp` and is not part of the wheel or manifest.
 
-## 2. Enable the Krita plugin
+Install, update and uninstall are serialized with a non-blocking process lock. Before the first
+managed-file mutation, the installer atomically writes and fsyncs a persistent journal. It records
+the state before and after every target-to-backup, stage-to-target or remove rename. If the process
+or machine stops mid-transaction, the next mutating installer command restores the previous
+plugin, protocol, desktop descriptor and configuration before beginning new work. A journal is
+removed only after final validation and transaction-directory cleanup. If recovery cannot be
+proven safe, the command stops and prints the retained journal and backup paths.
+
+An existing valid configuration, token, port, allowed roots and unknown configuration fields are
+preserved during migration and update. A changed `--allowed-root` is rejected during migration;
+configure policy changes separately instead of mixing them with a software update.
+
+Install and update never close Krita. If the authenticated bridge is active, replacement is
+rejected before any installed file is changed. On Windows, the installer does not infer port
+availability from `connect()` or `connection refused`. Instead, it binds an unlistening socket with
+`SO_EXCLUSIVEADDRUSE` exactly to `127.0.0.1` on every relevant old and new configured port. Those
+sockets remain open before staging and throughout journal creation, swaps/removes, validation and
+cleanup. This also prevents Krita or another process from claiming the port mid-install. Any bind
+failure blocks the command; close Krita manually or free the configured port and rerun it.
+
+## 2. Enable and restart the Krita plugin
 
 In Krita, open **Settings > Configure Krita > Python Plugin Manager** and enable
-**Krita Codex Bridge**.
+**Krita Codex Bridge**. Close and reopen Krita after every install or update. The restart is what
+loads the newly installed plugin and protocol together.
 
-## 3. Restart Krita
+## 3. Run the preflight
 
-Close and reopen Krita. A restart is required after install or update so the plugin and copied
-protocol package are loaded from the same version.
-
-## 4. Run the installation preflight
-
-With Krita running, execute:
+The offline check needs no running Krita process:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\check-installation.ps1
+uvx --from "krita-codex-mcp==0.1.0" `
+  krita-codex-install check --offline
 ```
 
-The preflight is local-only. It validates the Windows config, token, absolute writable allowed
-roots, MCP executable, plugin and protocol files, loopback host, port and authentication. It then
-creates a disposable 64×64 document, runs `krita_state`, validates a direct PNG preview, exports a
-temporary PNG beneath the first allowed root, closes the document and removes the temporary file.
-If another document was active before the check, the script reactivates it during cleanup.
+After Krita has restarted, run the full local preflight:
 
-A successful result ends with:
-
-```text
-Configuration: OK
-Plugin installation: OK
-Bridge: OK
-Authentication: OK
-MCP: OK
-Preview: OK
-Export: OK
-
-Ready for productive use.
+```powershell
+uvx --from "krita-codex-mcp==0.1.0" `
+  krita-codex-install check
 ```
 
-On failure, the script prints the failed category, a concrete cause and a suggested fix, then
-returns a non-zero exit code. Do not start productive Codex work until all categories are `OK`.
+The check compares the running wheel/installer version, the installed plugin and protocol hashes,
+and the distribution and protocol versions reported by the code actually loaded in Krita. It then
+validates authentication, creates a disposable document, checks `krita_state`, validates direct PNG
+preview bytes, exports beneath the first allowed root, closes the document, restores the previously
+active document and removes the temporary PNG.
 
-## 5. Configure Codex and start work
+Do not start productive work until the command ends with `Ready for productive use.`
 
-Choose one configuration scope:
+## 4. Configure Codex
 
-- **Recommended, user-level:** add the server to
-  `C:\Users\<you>\.codex\config.toml`. It is then available to all local Codex tasks and Git
-  worktrees for that Windows account, and it appears with the other personal MCP servers.
-- **Optional, project-level:** copy `.codex/config.toml.example` to `.codex/config.toml` inside a
-  trusted checkout and replace the placeholder paths. The real file is intentionally ignored by
-  Git because it contains machine-specific absolute paths. It applies only to that checkout and
-  is not copied into separately created Git worktrees.
-
-Do not commit either personal configuration or absolute user paths. Use the block printed by the
-installer, or adapt the example:
+The recommended server command is checkout-free and pinned to exactly the installed distribution
+version:
 
 ```toml
 [mcp_servers.krita]
-command = "C:\\absolute\\path\\krita-codex-mcp\\.venv\\Scripts\\krita-codex-mcp.exe"
-cwd = "C:\\absolute\\path\\krita-codex-mcp"
-startup_timeout_sec = 10
+command = "uvx"
+args = ["--from", "krita-codex-mcp==0.1.0", "krita-codex-mcp"]
+startup_timeout_sec = 60
 tool_timeout_sec = 210
 ```
 
-Restart Codex after changing its MCP configuration, then call `krita_state` followed by
-`krita_preview` before productive work. If a task reports that `krita_state` is not registered,
-confirm that the task can see the selected configuration scope; for worktree-heavy use, prefer the
-user-level file. The 210-second outer timeout allows the local
-bridge to use 30 seconds for normal reads and edits, 120 seconds for document open/save, and 180
-seconds for KRA/PNG, layer, animation, tileset and region exports, plus response overhead.
-
-If a running operation times out, it may still complete inside Krita. The bridge reports
-`operation_may_complete=true` and returns `BRIDGE_BUSY` to later calls until the original Qt
-operation really finishes. Do not immediately repeat a save or export against the same output.
-
-## Update and uninstall
-
-Update from the current checkout without replacing the existing config or token:
+For all tasks and Git worktrees, place it in the user-level
+`C:\Users\<you>\.codex\config.toml`. The installer does not edit that file during install or update.
+Preview its proposed managed block with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\update.ps1
+uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config
 ```
 
-Remove the installed plugin and copied protocol package while keeping config, token and `.venv`:
+Apply only after reviewing the complete preview:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
+uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --apply
 ```
 
-Optional destructive switches are explicit:
+The command asks for confirmation. `--yes` is an explicit non-interactive confirmation. Existing
+unmarked or ambiguous `[mcp_servers.krita]` entries are never overwritten. Only the block enclosed
+by installer markers can be updated or removed. Before an existing user config is replaced, an
+atomic sibling backup is written and both staged and final TOML are validated. Immediately before
+backup and replacement, the installer verifies that file existence and content still match the
+displayed preview. An external change aborts without replacing the file and requires a new preview.
+
+No bearer token is written to Codex configuration. Never commit personal configuration or machine
+paths. Restart Codex after changing its MCP configuration, then call `krita_state` and
+`krita_preview`.
+
+## Update, migration and uninstall
+
+Close Krita manually, then update with the new exact version:
 
 ```powershell
-.\scripts\uninstall.ps1 -RemovePythonEnvironment
-.\scripts\uninstall.ps1 -RemoveConfig
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install update
 ```
 
-Uninstall never traverses allowed roots and does not touch user images, KRA files or exports.
+After updating the payload, preview and explicitly update the managed Codex block to the same
+version, restart Krita and run the full preflight. A checkout-based legacy installation is migrated
+by `install`; its existing configuration and allowed roots are kept. The checkout and its `.venv`
+are not removed.
+
+Remove managed plugin files while keeping configuration and token:
+
+```powershell
+uvx --from "krita-codex-mcp==0.1.0" krita-codex-install uninstall
+```
+
+Configuration removal is deliberately explicit:
+
+```powershell
+uvx --from "krita-codex-mcp==0.1.0" krita-codex-install uninstall --remove-config
+uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --remove --apply
+```
+
+Uninstall never traverses allowed roots and never touches user images, KRA files or exports.
+
+## Repository compatibility scripts
+
+Trusted checkouts may continue to use `scripts/install.ps1`, `update.ps1`, `uninstall.ps1` and
+`check-installation.ps1`. These scripts only prepare or locate the checkout `.venv` and delegate to
+the same `krita-codex-install` Python implementation. They contain no separate copy of transaction,
+manifest, configuration, preflight or uninstall logic.
 
 ## Production safety and Krita 5.3.2.1 limits
 
@@ -142,13 +172,13 @@ Uninstall never traverses allowed roots and does not touch user images, KRA file
   creates hidden backup layers and blocks a second direct transform until save, close and reopen.
 - Transform masks are limited to three per open document; same-session mutation/removal and mixing
   direct and mask transform backends are blocked because that Krita build is teardown-unstable.
-- `Node.paintLine` accepts integer `QPoint` values in this build, so public numeric coordinates are
-  rounded at the native boundary.
-- PNG export temporarily uses Krita batch mode to avoid format dialogs. Keep the UI responsive and
-  do not close Krita during a long export.
+- PNG export temporarily uses Krita batch mode to avoid format dialogs. Do not close Krita during a
+  long export.
 
 ## Release verification
 
-Offline CI runs unit tests, Ruff and package builds without a Krita GUI. Before a release, run all
-live scripts in [the Krita 5.3.2.1 E2E checklist](krita-e2e-checklist.md), including the direct
-bridge, expansion, editing, regions, creation, transform-mask and real MCP STDIO checks.
+Offline CI runs unit tests, Ruff, direct wheel/sdist builds, wheel-from-sdist verification, artifact
+content checks and local-wheel `uvx` smokes without a Krita GUI. It also compares every Python,
+protocol and bundled plugin payload byte between the direct wheel and the wheel rebuilt from sdist,
+while intentionally ignoring wheel metadata. Before a release, run all live scripts in the
+[Krita 5.3.2.1 E2E checklist](krita-e2e-checklist.md).

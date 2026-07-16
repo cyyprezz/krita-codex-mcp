@@ -30,3 +30,21 @@ jobs:
           python -m unittest discover -s tests -v
           ruff check .
           python -m build
+
+      - name: Verify distributions and local wheel execution
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
+          $sdist = Get-ChildItem -LiteralPath dist -Filter *.tar.gz | Select-Object -First 1
+          python scripts/verify_distribution.py $wheel.FullName $sdist.FullName
+
+          $extract = Join-Path $env:RUNNER_TEMP "krita-codex-sdist"
+          New-Item -ItemType Directory -Force -Path $extract | Out-Null
+          tar -xf $sdist.FullName -C $extract
+          $source = Get-ChildItem -LiteralPath $extract -Directory | Select-Object -First 1
+          python -m build --wheel --outdir dist/from-sdist $source.FullName
+          $rebuilt = Get-ChildItem -LiteralPath dist/from-sdist -Filter *.whl | Select-Object -First 1
+          python scripts/verify_distribution.py $wheel.FullName $rebuilt.FullName
+
+          uvx --from $wheel.FullName krita-codex-install --version
+          python scripts/stdio_surface_smoke.py $wheel.FullName

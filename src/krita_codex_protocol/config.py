@@ -64,7 +64,8 @@ class BridgeConfig:
             raw = json.loads(config_path.read_text(encoding="utf-8"))
         except FileNotFoundError as exc:
             raise ConfigError(
-                f"Bridge configuration not found at {config_path}. Run scripts/install.ps1 first."
+                f"Bridge configuration not found at {config_path}. "
+                "Run krita-codex-install install first."
             ) from exc
         except (OSError, json.JSONDecodeError) as exc:
             raise ConfigError(f"Cannot read bridge configuration at {config_path}: {exc}") from exc
