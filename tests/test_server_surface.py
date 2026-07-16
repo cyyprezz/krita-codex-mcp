@@ -27,11 +27,12 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self) -> None:
         self.temp.cleanup()
 
-    async def test_registers_exactly_the_eleven_cohesive_tools(self) -> None:
+    async def test_registers_exactly_the_thirteen_cohesive_tools(self) -> None:
         tools = await self.server.list_tools()
+        self.assertEqual(len(tools), 13)
         self.assertEqual(
-            [tool.name for tool in tools],
-            [
+            {tool.name for tool in tools},
+            {
                 "krita_state",
                 "krita_preview",
                 "krita_canvas",
@@ -41,9 +42,11 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "krita_history",
                 "krita_brush",
                 "krita_paint_path",
+                "krita_draw",
+                "krita_color",
                 "krita_asset",
                 "krita_save_export",
-            ],
+            },
         )
 
     async def test_preview_returns_direct_image_content(self) -> None:
@@ -112,6 +115,13 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "invert",
                 "grow",
                 "shrink",
+                "move_selection",
+                "resize_selection",
+                "copy",
+                "cut",
+                "paste",
+                "copy_to_layer",
+                "cut_to_layer",
                 "fill",
                 "clear",
             ],
@@ -134,6 +144,11 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "delete",
                 "reorder",
                 "translate",
+                "scale",
+                "rotate",
+                "shear",
+                "crop",
+                "flip",
                 "merge_down",
             ],
         )
@@ -153,10 +168,33 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
             "krita_history",
             "krita_brush",
             "krita_paint_path",
+            "krita_draw",
+            "krita_color",
             "krita_asset",
             "krita_save_export",
         ):
             self.assertIn("document_id", tools[name].inputSchema["properties"], name)
+
+    async def test_draw_and_color_schemas_are_cohesive_and_bounded(self) -> None:
+        tools = {tool.name: tool for tool in await self.server.list_tools()}
+        self.assertEqual(
+            tools["krita_draw"].inputSchema["properties"]["shape"]["enum"],
+            ["line", "path", "rectangle", "ellipse", "polygon"],
+        )
+        self.assertEqual(
+            tools["krita_color"].inputSchema["properties"]["action"]["enum"],
+            [
+                "read",
+                "list_palettes",
+                "read_palette",
+                "set_project_palette",
+                "apply_swatch",
+                "replace_color",
+                "adjust",
+            ],
+        )
+        self.assertIn("entries", tools["krita_color"].inputSchema["properties"])
+        self.assertIn("settings", tools["krita_color"].inputSchema["properties"])
 
 
 if __name__ == "__main__":

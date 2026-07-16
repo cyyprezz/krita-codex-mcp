@@ -191,6 +191,14 @@ async def run(output_dir: Path) -> dict[str, Any]:
         },
         "LAYER_NOT_PAINTABLE",
     )
+    await client.execute(
+        "brush",
+        {
+            "action": "set",
+            "document_id": document_id,
+            "foreground": "#2244CCFF",
+        },
+    )
     try:
         painted = await client.execute(
             "paint_path",

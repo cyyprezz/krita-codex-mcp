@@ -24,6 +24,32 @@ class PluginContractTests(unittest.TestCase):
         self.assertNotIn("QPointF", source)
         self.assertNotIn("setPixelData", source)
 
+    def test_drawing_uses_native_brush_shapes(self) -> None:
+        source = plugin_source("drawing_service.py")
+        for call in (
+            "node.paintLine(",
+            "node.paintPath(",
+            "node.paintPolygon(",
+            "node.paintRectangle(",
+            "node.paintEllipse(",
+        ):
+            self.assertIn(call, source)
+        self.assertIn("QPoint(round(", source)
+        self.assertNotIn("setPixelData", source)
+
+    def test_color_surface_uses_selection_fill_and_undoable_filter_strokes(self) -> None:
+        source = plugin_source("color_service.py", "color_adjustment_service.py")
+        self.assertIn("Krita.instance().resources(\"palette\")", source)
+        self.assertIn("doc.setAnnotation(", source)
+        self.assertIn("_PROJECT_PALETTE_MAX_BYTES = 65_536", source)
+        self.assertIn("len(raw) > self._PROJECT_PALETTE_MAX_BYTES", source)
+        self.assertIn("len(encoded) > self._PROJECT_PALETTE_MAX_BYTES", source)
+        self.assertIn("replacement_selection.setPixelData", source)
+        self.assertIn('"fill_selection_foreground_color"', source)
+        self.assertIn("filter_object.startFilter(", source)
+        self.assertNotIn("filter_object.apply(", source)
+        self.assertNotIn("node.setPixelData", source)
+
     def test_no_arbitrary_python_execution_surface(self) -> None:
         for path in PLUGIN_ROOT.glob("*.py"):
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -81,6 +107,12 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("doc.crop(", canvas)
         self.assertIn("doc.rotateImage(", canvas)
         self.assertIn("doc.projection(", canvas)
+        self.assertNotIn("doc.thumbnail(", canvas)
+        self.assertIn(
+            "int(doc.width()) * int(doc.height()) > self.config.document_max_pixels",
+            canvas,
+        )
+        self.assertIn("Qt.SmoothTransformation", canvas)
         self.assertIn('"mirrorImageHorizontal"', canvas)
         self.assertIn('"mirrorImageVertical"', canvas)
         self.assertNotIn("mirror_canvas", canvas)
@@ -88,10 +120,12 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("doc.setSelection(", editing)
         self.assertIn('"fill_selection_foreground_color"', editing)
         self.assertIn('else "clear"', editing)
+        self.assertIn('"edit_paste"', editing)
+        self.assertIn('clipboard_modified=action in {"copy", "cut"}', editing)
         self.assertIn("node.setPixelData", canvas)
 
     def test_layer_asset_workflow_uses_native_node_operations(self) -> None:
-        source = plugin_source("layer_service.py")
+        source = plugin_source("layer_service.py", "layer_transform_service.py")
         self.assertIn("duplicate = node.duplicate()", source)
         self.assertIn("parent.addChildNode(duplicate, node)", source)
         self.assertIn("if not node.remove()", source)
@@ -102,6 +136,23 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("node.setAlphaLocked", source)
         self.assertIn("node.setBlendingMode", source)
         self.assertIn("node.mergeDown()", source)
+        self.assertIn("node.scaleNode", source)
+        self.assertIn("node.rotateNode", source)
+        self.assertIn("node.shearNode", source)
+        self.assertIn("node.cropNode", source)
+        self.assertIn("width * height > self.config.document_max_pixels", source)
+        self.assertIn('"mirrorNodeX"', source)
+        self.assertIn('"mirrorNodeY"', source)
+        self.assertIn(
+            "doc.setActiveNode(node)\n"
+            '            self._trigger_action(action_id, doc, scope="layer")',
+            source,
+        )
+        self.assertIn("backup = node.duplicate()", source)
+        self.assertIn('backup.setName(f"{node.name()} [before {action}]")', source)
+        self.assertIn('"backup_layer_id": self._node_id(backup)', source)
+        self.assertIn('"UNSAFE_TRANSFORM_SEQUENCE"', source)
+        self.assertIn("self._destructive_transform_documents.get(document_id)", source)
         self.assertIn('"metadata_dropped"] = True', source)
 
     def test_file_export_temporarily_suppresses_krita_dialogs(self) -> None:
@@ -172,6 +223,8 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("window.activate()", source)
         self.assertIn("window.showView(view)", source)
         self.assertIn("if not doc.save():", source)
+        self.assertIn("active is not None and id(active) in live_keys", source)
+        self.assertIn("doc.waitForDone()", source)
         self.assertIn('"UNSAVED_DOCUMENT"', source)
 
     def test_service_entrypoint_stays_small_and_operations_are_split(self) -> None:
@@ -181,9 +234,13 @@ class PluginContractTests(unittest.TestCase):
             "animation_service.py",
             "asset_service.py",
             "canvas_service.py",
+            "color_adjustment_service.py",
+            "color_service.py",
             "document_service.py",
+            "drawing_service.py",
             "editing_service.py",
             "layer_service.py",
+            "layer_transform_service.py",
             "painting_service.py",
             "package_service.py",
             "region_service.py",
@@ -191,7 +248,17 @@ class PluginContractTests(unittest.TestCase):
         ):
             path = PLUGIN_ROOT / name
             self.assertTrue(path.is_file(), name)
-            self.assertLessEqual(len(path.read_text(encoding="utf-8").splitlines()), 700, name)
+            self.assertLessEqual(len(path.read_text(encoding="utf-8").splitlines()), 550, name)
+
+        context = plugin_source("service_context.py")
+        self.assertIn("def _trigger_action(", context)
+        self.assertEqual(
+            sum(
+                plugin_source(path.name).count("Krita.instance().action(action_id)")
+                for path in PLUGIN_ROOT.glob("*.py")
+            ),
+            2,
+        )
 
 
 if __name__ == "__main__":

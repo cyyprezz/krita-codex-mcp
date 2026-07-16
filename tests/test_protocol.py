@@ -33,6 +33,8 @@ class ProtocolTests(unittest.TestCase):
     def test_accepts_canvas_and_edit_operations(self) -> None:
         self.assertEqual(BridgeRequest(operation="canvas", arguments={}).operation, "canvas")
         self.assertEqual(BridgeRequest(operation="edit", arguments={}).operation, "edit")
+        self.assertEqual(BridgeRequest(operation="draw", arguments={}).operation, "draw")
+        self.assertEqual(BridgeRequest(operation="color", arguments={}).operation, "color")
 
     def test_response_requires_exactly_one_payload(self) -> None:
         request = BridgeRequest(operation="state", arguments={})

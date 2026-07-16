@@ -29,6 +29,8 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
             "krita_history",
             "krita_brush",
             "krita_paint_path",
+            "krita_draw",
+            "krita_color",
             "krita_asset",
             "krita_save_export",
         }
@@ -48,6 +50,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
 
         created_document_id = None
         asset_smoke = None
+        creation_smoke = None
         try:
             state = await session.call_tool("krita_state", {})
             if state.isError:
@@ -124,6 +127,36 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                     "krita_edit",
                     {"action": "deselect", "document_id": created_document_id},
                 )
+                drawn = await session.call_tool(
+                    "krita_draw",
+                    {
+                        "shape": "ellipse",
+                        "document_id": created_document_id,
+                        "layer_id": layer_id,
+                        "x": 8,
+                        "y": 8,
+                        "width": 12,
+                        "height": 12,
+                        "stroke_style": "None",
+                        "fill_style": "ForegroundColor",
+                        "foreground": "#42D6C6FF",
+                    },
+                )
+                palette = await session.call_tool(
+                    "krita_color",
+                    {
+                        "action": "set_project_palette",
+                        "document_id": created_document_id,
+                        "project_name": "MCP Smoke",
+                        "entries": [{"name": "Accent", "color": "#42D6C6FF"}],
+                    },
+                )
+                if drawn.isError or palette.isError:
+                    raise RuntimeError("krita_draw or krita_color failed through STDIO MCP")
+                creation_smoke = {
+                    "shape": _structured_payload(drawn).get("shape"),
+                    "project_palette": _structured_payload(palette).get("project_palette"),
+                }
                 output_parent = repo_root / "e2e-output"
                 output_parent.mkdir(parents=True, exist_ok=True)
                 output_path = output_parent / "mcp-smoke-regions"
@@ -175,6 +208,15 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                 raise RuntimeError("MCP ImageContent payload is not a PNG")
             if not texts:
                 raise RuntimeError("krita_preview did not return its metadata TextContent")
+            preview_metadata = _text_payload(preview)
+            if created_document_id is not None and (
+                preview_metadata.get("width") != 128
+                or preview_metadata.get("height") != 96
+            ):
+                raise RuntimeError(
+                    "Whole-canvas preview dropped transparent margins: "
+                    f"{preview_metadata.get('width')}x{preview_metadata.get('height')}"
+                )
 
             return {
                 "tools": names,
@@ -184,7 +226,12 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                 "preview_content_types": [type(item).__name__ for item in preview.content],
                 "preview_mime_type": images[0].mimeType,
                 "preview_bytes": len(image_bytes),
+                "preview_size": [
+                    preview_metadata.get("width"),
+                    preview_metadata.get("height"),
+                ],
                 "asset_smoke": asset_smoke,
+                "creation_smoke": creation_smoke,
             }
         finally:
             if created_document_id is not None:
@@ -202,6 +249,12 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                 )
                 if closed.isError:
                     raise RuntimeError("Could not close the MCP smoke-test document")
+                closed_payload = _structured_payload(closed)
+                if (
+                    closed_payload.get("documents") == []
+                    and closed_payload.get("active_document_id") is not None
+                ):
+                    raise RuntimeError("Closing the last document retained a stale active ID")
 
 
 def _structured_payload(result) -> dict[str, object]:

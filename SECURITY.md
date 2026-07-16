@@ -17,9 +17,18 @@ This spike is designed for one Windows user controlling one local Krita process.
   schema; cross-kind/unknown packages and symbolic managed paths fail closed, while Unity `.meta`
   sidecars are preserved.
 - Closing a modified document fails unless `discard_changes=true` is explicit.
-- Native painting uses `Node.paintLine`; there is no `setPixelData` painting fallback. Bounded
+- Native painting and shapes use Krita's painting API; there is no `setPixelData` painting
+  fallback. Color replacement uses bounded RGBA/U8 reads and `Selection.setPixelData` only for a
+  temporary one-byte mask; the image mutation itself is a native fill action. Bounded
   editable raster import is the only operation that copies decoded image bytes into a paint layer,
   and it is restricted to allowed input paths, byte/pixel limits and RGBA/U8 destinations.
+
+Copy/cut/paste intentionally use Krita's process-global clipboard, so they may replace clipboard
+content visible to the same Windows user. Free Node transforms are not undoable through Krita's
+Python API; the bridge creates a hidden backup layer before those operations instead. Krita
+5.3.2.1 crashes when two such direct transforms are applied before document teardown, so the
+bridge rejects the second until that KRA has been saved, closed and reopened. Project palette
+annotations are size- and entry-limited when both writing and reading a KRA.
 
 The token protects against accidental or unrelated localhost callers, not against malware running
 as the same Windows user. Keep `%LOCALAPPDATA%\krita-codex-mcp\config.json` private. Choose narrow

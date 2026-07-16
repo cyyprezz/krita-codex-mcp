@@ -58,9 +58,34 @@ class CanvasOperationsMixin:
                 raise KritaOperationError(
                     "INVALID_ARGUMENT", "preview scale greater than 1 requires a region"
                 )
+            if int(doc.width()) * int(doc.height()) > self.config.document_max_pixels:
+                raise KritaOperationError(
+                    "PREVIEW_TOO_LARGE",
+                    "Whole-canvas preview exceeds the configured source pixel limit; "
+                    "request a bounded region instead",
+                    {
+                        "pixels": int(doc.width()) * int(doc.height()),
+                        "limit": self.config.document_max_pixels,
+                    },
+                )
             width, height = _fit_size(doc.width(), doc.height(), max_width, max_height)
-            image = doc.thumbnail(width, height)
             source_rect = QRect(0, 0, int(doc.width()), int(doc.height()))
+            doc.refreshProjection()
+            image = doc.projection(
+                source_rect.x(),
+                source_rect.y(),
+                source_rect.width(),
+                source_rect.height(),
+            )
+            if image is not None and not image.isNull() and (
+                image.width() != width or image.height() != height
+            ):
+                image = image.scaled(
+                    width,
+                    height,
+                    Qt.IgnoreAspectRatio,
+                    Qt.SmoothTransformation,
+                )
             preview_mode = "thumbnail"
         else:
             if not isinstance(raw_region, Mapping):
@@ -222,7 +247,7 @@ class CanvasOperationsMixin:
                 raise KritaOperationError(
                     "INVALID_ARGUMENT", "direction must be horizontal or vertical"
                 )
-            self._trigger_canvas_action(action_id, doc)
+            self._trigger_action(action_id, doc, scope="canvas")
             details = {"direction": direction, "native_action": action_id}
         else:
             return self._import_layer(doc, arguments)
@@ -357,21 +382,6 @@ class CanvasOperationsMixin:
                 "Input image dimensions exceed the configured document limits",
                 {"width": width, "height": height},
             )
-
-    def _trigger_canvas_action(self, action_id: str, doc) -> None:
-        action = Krita.instance().action(action_id)
-        if action is None:
-            raise KritaOperationError(
-                "UNSUPPORTED_FEATURE", "Krita does not expose the required canvas action"
-            )
-        if not action.isEnabled():
-            raise KritaOperationError(
-                "ACTION_DISABLED",
-                "Krita has disabled the required canvas action for this document",
-                {"action": action_id},
-            )
-        action.trigger()
-        doc.waitForDone()
 
     def _finish_canvas_mutation(self, doc) -> None:
         doc.waitForDone()

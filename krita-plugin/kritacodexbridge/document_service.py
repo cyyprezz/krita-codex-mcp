@@ -203,6 +203,7 @@ class DocumentOperationsMixin:
                 )
             if was_modified:
                 doc.setModified(False)
+            doc.waitForDone()
             if not doc.close():
                 if was_modified:
                     doc.setModified(True)
@@ -210,6 +211,7 @@ class DocumentOperationsMixin:
                     "DOCUMENT_CLOSE_FAILED", "Krita could not close the document"
                 )
             self._document_ids.pop(id(doc), None)
+            self._destructive_transform_documents.pop(document_id, None)
             self.bridge_revision += 1
             result = self._document_result(app, action)
             result["closed_document_id"] = document_id
@@ -283,7 +285,11 @@ class DocumentOperationsMixin:
             key: value for key, value in self._document_ids.items() if key in live_keys
         }
         active = app.activeDocument()
-        active_id = self._document_id(active) if active is not None else None
+        active_id = (
+            self._document_id(active)
+            if active is not None and id(active) in live_keys
+            else None
+        )
         result = {
             "action": action,
             "active_document_id": active_id,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from krita import Krita, ManagedColor, Selection
+from krita import ManagedColor, Selection
 
 from ._service_helpers import (
     _bounded_int,
@@ -26,6 +26,13 @@ class EditingOperationsMixin:
             "invert",
             "grow",
             "shrink",
+            "move_selection",
+            "resize_selection",
+            "copy",
+            "cut",
+            "paste",
+            "copy_to_layer",
+            "cut_to_layer",
             "fill",
             "clear",
         }
@@ -77,7 +84,7 @@ class EditingOperationsMixin:
             previous = doc.activeNode()
             doc.setActiveNode(node)
             try:
-                self._trigger_edit_action(action_id, doc)
+                self._trigger_action(action_id, doc, scope="edit")
             finally:
                 if previous is not None:
                     doc.setActiveNode(previous)
@@ -90,6 +97,10 @@ class EditingOperationsMixin:
             if changed:
                 self.bridge_revision += 1
             return self._selection_result(doc, action, changed=changed)
+        if action == "paste":
+            layer_id = _required_text(arguments.get("layer_id"), "layer_id", 80)
+            node = self._paint_node(doc, layer_id, allow_locked=False)
+            return self._clipboard_action(doc, node, action)
         if selection is None or selection.width() <= 0 or selection.height() <= 0:
             raise KritaOperationError(
                 "NO_SELECTION", "This edit action requires a non-empty selection"
@@ -108,8 +119,45 @@ class EditingOperationsMixin:
             return self._selection_result(
                 doc, action, changed=True, amount=amount
             )
+        if action == "move_selection":
+            x = _bounded_int(arguments.get("x"), "x", -1_000_000, 1_000_000)
+            y = _bounded_int(arguments.get("y"), "y", -1_000_000, 1_000_000)
+            selection.move(x, y)
+            self.bridge_revision += 1
+            return self._selection_result(
+                doc,
+                action,
+                changed=True,
+                selection_only=True,
+                undo_steps=0,
+                destination={"x": x, "y": y},
+            )
+        if action == "resize_selection":
+            width = _bounded_int(
+                arguments.get("width"), "width", 1, self.config.document_max_dimension
+            )
+            height = _bounded_int(
+                arguments.get("height"), "height", 1, self.config.document_max_dimension
+            )
+            if width * height > self.config.document_max_pixels:
+                raise KritaOperationError(
+                    "INVALID_ARGUMENT", "Selection dimensions exceed the configured pixel limit"
+                )
+            selection.resize(width, height)
+            self.bridge_revision += 1
+            return self._selection_result(
+                doc,
+                action,
+                changed=True,
+                selection_only=True,
+                undo_steps=0,
+                width=width,
+                height=height,
+            )
         layer_id = _required_text(arguments.get("layer_id"), "layer_id", 80)
         node = self._paint_node(doc, layer_id, allow_locked=False)
+        if action in {"copy", "cut", "copy_to_layer", "cut_to_layer"}:
+            return self._clipboard_action(doc, node, action)
         previous_node = doc.activeNode()
         doc.setActiveNode(node)
         previous_color = None
@@ -127,7 +175,7 @@ class EditingOperationsMixin:
                     )
                 view.setForeGroundColor(managed)
             action_id = "fill_selection_foreground_color" if action == "fill" else "clear"
-            self._trigger_edit_action(action_id, doc)
+            self._trigger_action(action_id, doc, scope="edit")
             doc.refreshProjection()
         finally:
             if view is not None and previous_color is not None:
@@ -145,6 +193,44 @@ class EditingOperationsMixin:
         )
         if action == "fill" and "color" in arguments:
             result["color"] = arguments["color"]
+        return result
+
+    def _clipboard_action(self, doc, node, action: str):
+        action_id = {
+            "copy": "edit_copy",
+            "cut": "edit_cut",
+            "paste": "edit_paste",
+            "copy_to_layer": "copy_selection_to_new_layer",
+            "cut_to_layer": "cut_selection_to_new_layer",
+        }[action]
+        source_id = self._node_id(node)
+        doc.setActiveNode(node)
+        self._trigger_action(action_id, doc, scope="edit")
+        doc.refreshProjection()
+        affected = doc.activeNode()
+        creates_layer = action in {"paste", "copy_to_layer", "cut_to_layer"}
+        if creates_layer and (affected is None or self._same_node(affected, node)):
+            raise KritaOperationError(
+                "CLIPBOARD_ACTION_FAILED",
+                "Krita did not create the expected paint layer",
+                {"action": action_id},
+            )
+        self.bridge_revision += 1
+        result = self._selection_result(
+            doc,
+            action,
+            changed=action != "copy",
+            layer_id=source_id,
+            clipboard_modified=action in {"copy", "cut"},
+            clipboard_scope=(
+                "Krita global clipboard" if action in {"copy", "cut", "paste"} else None
+            ),
+            native_action=action_id,
+            undo_steps=0 if action == "copy" else 1,
+        )
+        if creates_layer:
+            result["created_layer_id"] = self._node_id(affected)
+            result["created_layer_name"] = affected.name()
         return result
 
     def _apply_selection(self, doc, selection, combine: str) -> None:
@@ -183,23 +269,6 @@ class EditingOperationsMixin:
                 "INVALID_ARGUMENT", "Unsupported selection combine mode"
             )
         return combine
-
-    def _trigger_edit_action(self, action_id: str, doc) -> None:
-        action = Krita.instance().action(action_id)
-        if action is None:
-            raise KritaOperationError(
-                "UNSUPPORTED_FEATURE",
-                "Krita does not expose the required native edit action",
-                {"action": action_id},
-            )
-        if not action.isEnabled():
-            raise KritaOperationError(
-                "ACTION_DISABLED",
-                "Krita has disabled the required native edit action",
-                {"action": action_id},
-            )
-        action.trigger()
-        doc.waitForDone()
 
     def _selection_result(
         self, doc, action: str, *, changed: bool, **details: Any

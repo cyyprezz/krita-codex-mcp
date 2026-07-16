@@ -8,10 +8,14 @@ from krita_codex_protocol import BridgeConfig, PathPolicy
 from .animation_service import AnimationOperationsMixin
 from .asset_service import AssetOperationsMixin
 from .canvas_service import CanvasOperationsMixin
+from .color_adjustment_service import ColorAdjustmentOperationsMixin
+from .color_service import ColorOperationsMixin
 from .document_service import DocumentOperationsMixin
+from .drawing_service import DrawingOperationsMixin
 from .editing_service import EditingOperationsMixin
 from .errors import KritaOperationError
 from .layer_service import LayerOperationsMixin
+from .layer_transform_service import LayerTransformOperationsMixin
 from .package_service import PackageOperationsMixin
 from .painting_service import PaintingOperationsMixin
 from .region_service import RegionOperationsMixin
@@ -23,7 +27,11 @@ class KritaService(
     CanvasOperationsMixin,
     EditingOperationsMixin,
     LayerOperationsMixin,
+    LayerTransformOperationsMixin,
     PaintingOperationsMixin,
+    DrawingOperationsMixin,
+    ColorOperationsMixin,
+    ColorAdjustmentOperationsMixin,
     PackageOperationsMixin,
     AnimationOperationsMixin,
     RegionOperationsMixin,
@@ -37,6 +45,7 @@ class KritaService(
         self.path_policy = PathPolicy(config.allowed_roots)
         self.bridge_revision = 0
         self._document_ids: dict[int, str] = {}
+        self._destructive_transform_documents: dict[str, str] = {}
 
     def execute(self, operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         handlers = {
@@ -49,6 +58,8 @@ class KritaService(
             "history": self.history,
             "brush": self.brush,
             "paint_path": self.paint_path,
+            "draw": self.draw,
+            "color": self.color,
             "asset": self.asset,
             "save_export": self.save_export,
         }

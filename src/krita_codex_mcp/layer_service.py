@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .validation import InputError, bounded_int, required_text
+from .validation import InputError, bounded_int, finite_number, required_text
 
 SAFE_LAYER_BLENDING_MODES = {
     "add",
@@ -42,6 +42,15 @@ class LayerServiceMixin:
         blending_mode: str | None = None,
         offset_x: int | None = None,
         offset_y: int | None = None,
+        x: int | None = None,
+        y: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        strategy: str = "NearestNeighbor",
+        angle_degrees: float | None = None,
+        shear_x_degrees: float | None = None,
+        shear_y_degrees: float | None = None,
+        direction: str | None = None,
     ) -> dict[str, Any]:
         actions = {
             "read",
@@ -53,12 +62,17 @@ class LayerServiceMixin:
             "delete",
             "reorder",
             "translate",
+            "scale",
+            "rotate",
+            "shear",
+            "crop",
+            "flip",
             "merge_down",
         }
         if action not in actions:
             raise InputError(
                 "action must be read, create, activate, rename, set_properties, duplicate, "
-                "delete, reorder, translate, or merge_down"
+                "delete, reorder, translate, scale, rotate, shear, crop, flip, or merge_down"
             )
         arguments: dict[str, Any] = {"action": action}
         if document_id is not None:
@@ -73,6 +87,11 @@ class LayerServiceMixin:
             "delete",
             "reorder",
             "translate",
+            "scale",
+            "rotate",
+            "shear",
+            "crop",
+            "flip",
             "merge_down",
         }:
             arguments["layer_id"] = required_text(layer_id, "layer_id", maximum=80)
@@ -110,6 +129,62 @@ class LayerServiceMixin:
                 raise InputError("translate requires a non-zero offset")
             arguments["offset_x"] = normalized_x
             arguments["offset_y"] = normalized_y
+        elif action == "scale":
+            normalized_width = bounded_int(width, "width", 1, 32768)
+            normalized_height = bounded_int(height, "height", 1, 32768)
+            arguments.update(
+                {
+                    "width": normalized_width,
+                    "height": normalized_height,
+                    "strategy": required_text(strategy, "strategy", maximum=100),
+                }
+            )
+            if x is not None:
+                arguments["x"] = bounded_int(x, "x", -1_000_000, 1_000_000)
+            if y is not None:
+                arguments["y"] = bounded_int(y, "y", -1_000_000, 1_000_000)
+        elif action == "rotate":
+            angle = finite_number(angle_degrees, "angle_degrees", -360.0, 360.0)
+            if angle == 0:
+                raise InputError("angle_degrees must be non-zero")
+            arguments["angle_degrees"] = angle
+        elif action == "shear":
+            angle_x = finite_number(
+                shear_x_degrees if shear_x_degrees is not None else 0.0,
+                "shear_x_degrees",
+                -89.0,
+                89.0,
+            )
+            angle_y = finite_number(
+                shear_y_degrees if shear_y_degrees is not None else 0.0,
+                "shear_y_degrees",
+                -89.0,
+                89.0,
+            )
+            if angle_x == 0 and angle_y == 0:
+                raise InputError("shear requires a non-zero angle")
+            arguments.update(
+                {"shear_x_degrees": angle_x, "shear_y_degrees": angle_y}
+            )
+        elif action == "crop":
+            crop_width = bounded_int(width, "width", 1, self.config.document_max_dimension)
+            crop_height = bounded_int(
+                height, "height", 1, self.config.document_max_dimension
+            )
+            if crop_width * crop_height > self.config.document_max_pixels:
+                raise InputError("cropped layer exceeds the configured pixel limit")
+            arguments.update(
+                {
+                    "x": bounded_int(x, "x", -1_000_000, 1_000_000),
+                    "y": bounded_int(y, "y", -1_000_000, 1_000_000),
+                    "width": crop_width,
+                    "height": crop_height,
+                }
+            )
+        elif action == "flip":
+            if direction not in {"horizontal", "vertical"}:
+                raise InputError("direction must be horizontal or vertical")
+            arguments["direction"] = direction
         elif action == "set_properties":
             properties = {
                 "visible": visible,

@@ -12,6 +12,7 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe .\scripts\live_expansion_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_editing_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_regions_e2e.py --output-dir "C:\absolute\allowed\root"
+.\.venv\Scripts\python.exe .\scripts\live_creation_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_mcp_e2e.py
 ```
 
@@ -73,6 +74,26 @@ $env:PYTHONPATH = "src"
 14. Attempt to close a modified document without discard permission and confirm `UNSAVED_CHANGES`.
     Then close it explicitly and retry all active-document categories; confirm
     `NO_ACTIVE_DOCUMENT` instead of plugin crashes or hangs.
+15. Copy, cut and paste an active rectangular selection through `krita_edit`. Confirm paste creates
+    a new paint layer with a returned UUID, and that `copy_to_layer` and `cut_to_layer` create
+    addressable layers. Undo the cut and confirm the source pixels return. Move and resize the
+    selection mask and verify the image pixels remain unchanged until a later edit uses it.
+16. Exercise scale, rotate, shear and crop in separate disposable documents through
+    `krita_layers`; each transformed layer must remain addressable by UUID and return a hidden
+    full-layer backup UUID because those direct node APIs add no native Undo command. In one
+    document, apply one direct transform and confirm a second fails with
+    `UNSAFE_TRANSFORM_SEQUENCE` until save/close/reopen. Confirm flip still adds one native Undo
+    command and does not consume the direct-transform allowance.
+17. Draw a line, open and closed path, rectangle, ellipse and polygon through `krita_draw`. Verify
+    native preset texture/dynamics, stroke/fill styles and one `Scripted Brush Stroke` Undo entry
+    per shape. Reject unsupported style names and malformed geometry before painting.
+18. Store a named project palette through `krita_color`, save, close and reopen the KRA, then read
+    the same entries from the document annotation. List and read installed Krita palettes without
+    mutating the global resources. Apply a project swatch and confirm the foreground changes.
+19. Replace an exact color and a tolerance-matched color through `krita_color`. Confirm only the
+    matching pixels change, the matching selection remains active, and one Undo restores the
+    original pixels. Deselect when finished. Apply an allowlisted correction filter such as
+    `invert` or `levels` and confirm one native Undo restores the previous projection.
 
 Record the exact Krita version and whether `state.capabilities.native_paint_line` is true. The
 current generated API reference labels `Node.paintLine` as a Krita 6.0 addition even though the
@@ -91,9 +112,9 @@ UUID. It switched the concrete Krita view only for target mutations, searched na
 painted two segments, completed two Undo and two Redo operations, exercised persistent layer-tree
 editing, refused an unsafe close, saved KRA/PNG, renamed a layer, checkpoint-saved the existing
 KRA, exported an isolated 320×240 group PNG with a transparent corner, closed, reopened and
-verified the checkpointed layer structure before closing both documents. The eleven-tool STDIO
-check also created its own document and returned a PNG preview containing
-`TextContent` plus `ImageContent` before cleaning up.
+verified the checkpointed layer structure before closing both documents. The thirteen-tool STDIO
+check also created its own document and returned a PNG preview containing `TextContent` plus
+`ImageContent`, exercised native ellipse drawing and stored a project palette before cleaning up.
 
 The animation-package extension additionally exported two explicitly ordered frame layers as
 individual PNGs and a padded spritesheet, derived the shared crop from isolated rendered alpha,
@@ -113,3 +134,19 @@ sidecars across an auto-fit re-export, refused a non-overwrite and a locked-laye
 verified pixel-identical merge-down plus Undo restoration of both source UUIDs. Forced mid-path
 painting rollback remains a manual checklist item because the bridge intentionally has no
 arbitrary failure-injection tool.
+
+The creation extension drew native rectangle, ellipse, polygon, open/closed path and pressure-line
+shapes, then verified rectangle Undo and Redo. Exact color replacement changed 192 pixels and one
+Undo restored them; an undoable `invert` filter behaved the same way. Clipboard copy/paste,
+copy-to-layer and cut-to-layer returned stable layer UUIDs, and cut was undoable. Direct scale,
+rotate, shear and crop were confirmed non-undoable on Krita 5.3.2.1 and each returned a hidden
+backup layer UUID in an isolated document; a second direct transform in one open document was
+rejected before mutation to avoid the reproduced native teardown crash. Flip remained natively
+undoable. A three-entry `Hero Core` project palette survived a KRA save, close and reopen round
+trip.
+
+A direct Codex MCP workflow created a 128x128 three-layer energy pickup, stored four project
+colors, exported KRA plus PNG, and reopened the KRA with the same three layer UUIDs and palette.
+After clearing Krita's initially opaque background, exported corner pixels had alpha zero. The
+whole-canvas preview retained the full 128x128 transparent canvas and scaled to 64x64 on request;
+closing the last document returned an empty list with `active_document_id=null`.

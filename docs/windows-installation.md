@@ -67,6 +67,8 @@ Then verify the installed STDIO server and direct MCP image payload:
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\live_expansion_e2e.py `
   --output-dir "C:\absolute\allowed\root"
+.\.venv\Scripts\python.exe .\scripts\live_creation_e2e.py `
+  --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_mcp_e2e.py
 ```
 

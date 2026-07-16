@@ -17,6 +17,8 @@ ALLOWED_OPERATIONS = frozenset(
         "history",
         "brush",
         "paint_path",
+        "draw",
+        "color",
         "asset",
         "save_export",
     }

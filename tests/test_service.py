@@ -478,6 +478,133 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(self.client.calls, [])
 
+    async def test_edit_clipboard_and_selection_transform_payloads(self) -> None:
+        await self.service.edit(
+            action="move_selection", document_id="document-1", x=4, y=5
+        )
+        self.assertEqual(
+            self.client.calls[-1],
+            ("edit", {"action": "move_selection", "document_id": "document-1", "x": 4, "y": 5}),
+        )
+        await self.service.edit(action="copy_to_layer", layer_id="layer-1")
+        self.assertEqual(
+            self.client.calls[-1],
+            ("edit", {"action": "copy_to_layer", "layer_id": "layer-1"}),
+        )
+
+    async def test_layer_native_transform_payloads(self) -> None:
+        await self.service.layers(
+            action="scale",
+            layer_id="layer-1",
+            width=32,
+            height=48,
+            x=2,
+            y=3,
+            strategy="NearestNeighbor",
+        )
+        self.assertEqual(
+            self.client.calls[-1],
+            (
+                "layers",
+                {
+                    "action": "scale",
+                    "layer_id": "layer-1",
+                    "width": 32,
+                    "height": 48,
+                    "strategy": "NearestNeighbor",
+                    "x": 2,
+                    "y": 3,
+                },
+            ),
+        )
+        await self.service.layers(
+            action="flip", layer_id="layer-1", direction="horizontal"
+        )
+        self.assertEqual(self.client.calls[-1][1]["direction"], "horizontal")
+
+        call_count = len(self.client.calls)
+        with self.assertRaisesRegex(InputError, "pixel limit"):
+            await self.service.layers(
+                action="crop",
+                layer_id="layer-1",
+                x=0,
+                y=0,
+                width=16384,
+                height=16384,
+            )
+        self.assertEqual(len(self.client.calls), call_count)
+
+    async def test_draw_normalizes_native_shape_resources(self) -> None:
+        await self.service.draw(
+            shape="polygon",
+            layer_id="layer-1",
+            points=[{"x": 1, "y": 2}, {"x": 8, "y": 2}, {"x": 4, "y": 9}],
+            fill_style="ForegroundColor",
+            foreground="#aabbcc",
+        )
+        operation, arguments = self.client.calls[-1]
+        self.assertEqual(operation, "draw")
+        self.assertEqual(arguments["foreground"], "#AABBCC")
+        self.assertEqual(arguments["fill_style"], "ForegroundColor")
+        self.assertEqual(len(arguments["points"]), 3)
+
+    async def test_draw_rejects_invisible_shape(self) -> None:
+        with self.assertRaisesRegex(InputError, "cannot both"):
+            await self.service.draw(
+                shape="rectangle",
+                x=0,
+                y=0,
+                width=8,
+                height=8,
+                stroke_style="None",
+                fill_style="None",
+            )
+        self.assertEqual(self.client.calls, [])
+
+    async def test_project_palette_and_color_adjustment_are_bounded(self) -> None:
+        await self.service.color(
+            action="set_project_palette",
+            project_name="Hero",
+            entries=[{"name": "Outline", "color": "#112233"}],
+        )
+        self.assertEqual(
+            self.client.calls[-1],
+            (
+                "color",
+                {
+                    "action": "set_project_palette",
+                    "project_name": "Hero",
+                    "entries": [{"name": "Outline", "color": "#112233"}],
+                },
+            ),
+        )
+        await self.service.color(
+            action="adjust",
+            layer_id="layer-1",
+            filter_name="hsvadjustment",
+            settings={"h": 15, "s": -10},
+        )
+        self.assertEqual(self.client.calls[-1][1]["settings"], {"h": 15, "s": -10})
+
+        call_count = len(self.client.calls)
+        with self.assertRaisesRegex(InputError, "65536-byte"):
+            await self.service.color(
+                action="set_project_palette",
+                project_name="Hero",
+                entries=[
+                    {"name": "\U0001f3a8" * 97 + f"{index:03d}", "color": "#112233"}
+                    for index in range(256)
+                ],
+            )
+        self.assertEqual(len(self.client.calls), call_count)
+
+    async def test_color_rejects_unknown_filter_before_bridge(self) -> None:
+        with self.assertRaisesRegex(InputError, "filter_name"):
+            await self.service.color(
+                action="adjust", layer_id="layer-1", filter_name="oilpaint"
+            )
+        self.assertEqual(self.client.calls, [])
+
     async def test_save_export_rejects_outside_path_before_bridge_call(self) -> None:
         outside = self.root.parent / "outside.png"
         with self.assertRaisesRegex(InputError, "outside"):

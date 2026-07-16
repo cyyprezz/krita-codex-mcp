@@ -65,6 +65,24 @@ class ServiceContextMixin:
         window = Krita.instance().activeWindow()
         return window.activeView() if window else None
 
+    @staticmethod
+    def _trigger_action(action_id: str, doc, *, scope: str) -> None:
+        action = Krita.instance().action(action_id)
+        if action is None:
+            raise KritaOperationError(
+                "UNSUPPORTED_FEATURE",
+                f"Krita does not expose the required {scope} action",
+                {"action": action_id},
+            )
+        if not action.isEnabled():
+            raise KritaOperationError(
+                "ACTION_DISABLED",
+                f"Krita has disabled the required {scope} action",
+                {"action": action_id},
+            )
+        action.trigger()
+        doc.waitForDone()
+
     def _encode_png_preview(self, image) -> bytes:
         payload = QByteArray()
         buffer = QBuffer(payload)

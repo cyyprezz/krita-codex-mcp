@@ -13,6 +13,8 @@ from krita_codex_protocol import (
 
 from .asset_service import AssetServiceMixin
 from .bridge_client import BridgeCallError
+from .color_service import ColorServiceMixin
+from .drawing_service import DrawingServiceMixin
 from .editing_service import EditingServiceMixin
 from .layer_service import LayerServiceMixin
 from .validation import (
@@ -29,7 +31,13 @@ class BridgeExecutor(Protocol):
     async def execute(self, operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]: ...
 
 
-class KritaService(EditingServiceMixin, LayerServiceMixin, AssetServiceMixin):
+class KritaService(
+    EditingServiceMixin,
+    LayerServiceMixin,
+    DrawingServiceMixin,
+    ColorServiceMixin,
+    AssetServiceMixin,
+):
     def __init__(self, config: BridgeConfig, client: BridgeExecutor) -> None:
         self.config = config
         self.client = client

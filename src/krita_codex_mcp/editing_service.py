@@ -36,6 +36,13 @@ EDIT_ACTIONS = {
     "invert",
     "grow",
     "shrink",
+    "move_selection",
+    "resize_selection",
+    "copy",
+    "cut",
+    "paste",
+    "copy_to_layer",
+    "cut_to_layer",
     "fill",
     "clear",
 }
@@ -164,7 +171,8 @@ class EditingServiceMixin:
         if action not in EDIT_ACTIONS:
             raise self._input_error(
                 "action must be selection_status, select_rect, select_all, select_opaque, "
-                "deselect, invert, grow, shrink, fill, or clear"
+                "deselect, invert, grow, shrink, move_selection, resize_selection, "
+                "copy, cut, paste, copy_to_layer, cut_to_layer, fill, or clear"
             )
         arguments: dict[str, Any] = {"action": action}
         self._add_document_id(arguments, document_id)
@@ -188,7 +196,21 @@ class EditingServiceMixin:
             arguments["combine"] = self._combine_mode(combine)
         elif action in {"grow", "shrink"}:
             arguments["amount"] = self._bounded_integer(amount, "amount", 1, 4096)
-        elif action in {"fill", "clear"}:
+        elif action == "move_selection":
+            arguments["x"] = self._required_coordinate(x, "x")
+            arguments["y"] = self._required_coordinate(y, "y")
+        elif action == "resize_selection":
+            normalized_width, normalized_height = self._bounded_size(width, height)
+            arguments.update({"width": normalized_width, "height": normalized_height})
+        elif action in {
+            "copy",
+            "cut",
+            "paste",
+            "copy_to_layer",
+            "cut_to_layer",
+            "fill",
+            "clear",
+        }:
             arguments["layer_id"] = self._required_text_value(
                 layer_id, "layer_id", maximum=80
             )

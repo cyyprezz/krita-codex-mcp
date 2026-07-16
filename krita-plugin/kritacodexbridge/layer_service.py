@@ -67,6 +67,7 @@ class LayerOperationsMixin:
         node = self._find_node(doc, layer_id)
         if node is None or self._same_node(node, doc.rootNode()):
             raise KritaOperationError("LAYER_NOT_FOUND", "Layer UUID was not found")
+        operation_details: dict[str, Any] = {}
         if action == "activate":
             doc.setActiveNode(node)
         elif action == "rename":
@@ -175,6 +176,8 @@ class LayerOperationsMixin:
             position = node.position()
             node.move(int(position.x()) + offset_x, int(position.y()) + offset_y)
             doc.setActiveNode(node)
+        elif action in {"scale", "rotate", "shear", "crop", "flip"}:
+            self._transform_layer(node, doc, action, arguments, operation_details)
         elif action == "set_properties":
             requested: dict[str, Any] = {}
             for field in ("visible", "locked", "alpha_locked", "inherit_alpha"):
@@ -341,7 +344,9 @@ class LayerOperationsMixin:
         else:
             raise KritaOperationError("INVALID_ARGUMENT", f"Unsupported layer action: {action}")
         self._finish_mutation(doc)
-        return self._layer_result(doc, str(action), affected=node)
+        result = self._layer_result(doc, str(action), affected=node)
+        result.update(operation_details)
+        return result
 
     def _layer_forest(self, doc) -> list[dict[str, Any]]:
         count = [0]

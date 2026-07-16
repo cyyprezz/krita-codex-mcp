@@ -42,9 +42,9 @@ Structured failure:
 ```
 
 Only `state`, `preview`, `canvas`, `edit`, `document`, `layers`, `history`, `brush`, `paint_path`,
-`asset`, and `save_export` are valid operations. Request IDs are checked in both directions. The
-bridge accepts one operation at a time and enforces request, response, preview, import/asset-size,
-document-size, point-count and timeout limits.
+`draw`, `color`, `asset`, and `save_export` are valid operations. Request IDs are checked in both
+directions. The bridge accepts one operation at a time and enforces request, response, preview,
+import/asset-size, document-size, point-count and timeout limits.
 
 `bridge_revision` counts successful mutations performed through this bridge instance. It is not
 a document revision and does not detect edits made manually in Krita or by another plugin.
@@ -67,13 +67,14 @@ a KRA path. Modified documents refuse to close unless `discard_changes=true` is 
 Document IDs are stable for the lifetime of the plugin and document, but are not persisted across
 Krita restarts.
 
-State, preview, canvas, edit, layer, history, brush, paint and save/export requests accept an
-optional `document_id`. Reads can inspect an inactive document without changing the visible
-selection. View-dependent mutations first switch to the concrete Krita view that owns the target
-document and fail closed if Krita cannot confirm the switch. Responses identify the document they
-used.
+State, preview, canvas, edit, layer, history, brush, paint/draw, color and save/export requests
+accept an optional `document_id`. Reads can inspect an inactive document without changing the
+visible selection. View-dependent mutations first switch to the concrete Krita view that owns the
+target document and fail closed if Krita cannot confirm the switch. Responses identify the
+document they used.
 
-`preview` returns either a bounded whole-canvas thumbnail or a bounded document-projection region.
+`preview` returns either a bounded whole-canvas projection thumbnail or a bounded
+document-projection region. Transparent outer margins remain part of the whole-canvas result.
 An explicit `x`, `y`, `width`, `height` region may be enlarged by an integer scale of 1–16 using
 nearest-neighbor sampling, while `max_width` and `max_height` remain hard output bounds.
 
@@ -90,7 +91,10 @@ limited to RGBA/U8 destination documents so pixel layout conversion fails closed
 guessing. The import path is not retained as a file-layer dependency.
 
 `edit` supports selection status, rectangle/all/opaque selection, replace/add/subtract/intersect
-combination, deselect, invert, grow, shrink, fill, and clear. Fill and clear require both a
+combination, deselect, invert, grow, shrink, selection-mask move/resize, fill, and clear. Native
+`copy`, `cut`, and `paste` use Krita's global clipboard. `copy_to_layer` and `cut_to_layer` turn the
+current selection into a new transformable paint layer without exposing raw clipboard bytes.
+Paste creates a new paint layer and returns its UUID. Fill and clear require both a
 non-empty document selection and an explicit paint-layer UUID; locked or non-paint layers fail
 closed. They trigger Krita's native registered actions and report one expected undo step. Selection
 mask changes increment `bridge_revision`, but are not presented as document-content undo steps.
@@ -110,6 +114,30 @@ through getters and rolled back if Krita rejects any field. `merge_down` is inte
 to two adjacent, visible, unlocked paint layers; it reports both consumed UUIDs and explicitly
 states that Krita discards the source layer metadata. One normal Krita Undo restores the two
 layers.
+
+Layer transforms include scale, arbitrary rotation, shear, crop and horizontal/vertical mirror.
+Scale strategies are checked against the running Krita build. Krita 5.3.2.1 does not put direct
+`Node.scaleNode`, `rotateNode`, `shearNode`, or `cropNode` calls on its Undo stack; these four
+actions therefore create a hidden full-layer backup first and return `backup_layer_id`. Restore by
+showing that backup and removing/hiding the transformed layer. Mirror uses `mirrorNodeX/Y` and
+reports one native Undo step. A second direct node transform in the same open document triggers a
+native Krita 5.3.2.1 teardown crash even when it targets a different layer. The bridge therefore
+fails closed with `UNSAFE_TRANSFORM_SEQUENCE`; save, close and reopen the KRA before applying the
+next direct transform. Mirror remains available between direct transforms.
+
+`draw` is a cohesive native-shape operation over `Node.paintLine`, `paintPath`, `paintPolygon`,
+`paintRectangle`, and `paintEllipse`. It accepts explicit foreground/background stroke and fill
+styles, optional preset and brush size, open or closed paths, and pressure for line endpoints.
+Every successful call is one scripted-brush Undo step. The existing `paint_path` remains the
+pressure-aware multi-segment API and reports one step per segment.
+
+`color` can list/read installed Krita palettes and apply a swatch to foreground or background.
+It also stores up to 256 named `#RRGGBB[AA]` entries as a private document annotation, so the
+project palette persists inside the KRA without mutating global Krita resources. Exact/tolerant
+RGBA/U8 replacement reads bounded layer pixels only to build a one-byte selection mask, then uses
+Krita's native foreground-fill action; matching pixels remain selected so one Undo targets the
+image mutation. `adjust` exposes a fixed filter allow-list, accepts only keys exposed by the
+running filter configuration, and uses undoable `Filter.startFilter`, never direct `Filter.apply`.
 
 `asset` supports `export_layer` for paint layers and groups. It clones the document, isolates the
 target by its validated layer-index path, renders Krita's document projection and atomically
