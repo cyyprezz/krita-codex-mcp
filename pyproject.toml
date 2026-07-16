@@ -50,6 +50,7 @@ include = [
   "/README.md",
   "/SECURITY.md",
   "/pyproject.toml",
+  "/server.json",
   "/uv.lock",
 ]
 

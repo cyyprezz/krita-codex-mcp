@@ -1,5 +1,7 @@
 # Krita Codex MCP Server
 
+<!-- mcp-name: io.github.cyyprezz/krita-codex-mcp -->
+
 Control Krita from OpenAI Codex through a secure local
 Model Context Protocol (MCP) server for Windows.
 
@@ -178,6 +180,14 @@ See [Windows installation](docs/windows-installation.md), [protocol](docs/protoc
 [security](SECURITY.md), [service mixin contracts](docs/service-mixin-contracts.md), and the
 [Krita E2E checklist](docs/krita-e2e-checklist.md).
 
+## Releases
+
+Releases are built from stable `vX.Y.Z` tags that already belong to `main`. The release workflow
+repeats the complete Windows verification, publishes the exact verified wheel and sdist through
+PyPI Trusted Publishing, and creates the GitHub release only after the PyPI upload succeeds. It
+does not use a stored PyPI API token. See the [release guide](docs/releasing.md) for the one-time
+publisher setup and the release checklist.
+
 ## License
 
 Released under the [MIT License](LICENSE). Copyright (c) 2026 Nicklas Desens.
@@ -203,6 +213,7 @@ uv sync --all-groups --python 3.12
 $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\ruff.exe check .
+.\.venv\Scripts\python.exe scripts\verify_release.py
 .\.venv\Scripts\python.exe -m build
 ```
 
