@@ -1,4 +1,7 @@
-# krita-codex-mcp
+# Krita Codex MCP Server
+
+Control Krita from OpenAI Codex through a secure local
+Model Context Protocol (MCP) server for Windows.
 
 A Windows-first local MCP server that lets Codex inspect and control Krita through a small,
 authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listens only on
