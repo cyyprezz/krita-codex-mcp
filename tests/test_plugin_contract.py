@@ -68,12 +68,19 @@ class PluginContractTests(unittest.TestCase):
     def test_auth_rejection_drains_bounded_body_without_dispatch(self) -> None:
         source = (PLUGIN_ROOT / "http_server.py").read_text(encoding="utf-8")
         self.assertIn("self._discard_announced_body()", source)
-        self.assertIn("length <= self.server.config.max_request_bytes", source)
+        self.assertIn(
+            "self._drain_body(length, maximum_bytes=self.server.config.max_request_bytes)",
+            source,
+        )
+        self.assertIn("_BODY_DRAIN_TIMEOUT_SECONDS = 0.25", source)
+        self.assertIn("_OVERSIZE_DRAIN_MAX_BYTES", source)
 
     def test_qt_dispatch_is_queued_and_timeout_aware(self) -> None:
         source = (PLUGIN_ROOT / "http_bridge.py").read_text(encoding="utf-8")
         self.assertIn("Qt.QueuedConnection", source)
         self.assertIn("envelope.done.wait(timeout_seconds)", source)
+        self.assertIn('operation_may_complete = state == "running"', source)
+        self.assertIn('"operation_may_complete": operation_may_complete', source)
         self.assertNotIn("BlockingQueuedConnection", source)
 
     def test_plugin_has_persistent_log_and_status_action(self) -> None:

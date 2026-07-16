@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import base64
 from collections.abc import Mapping
 from typing import Any
 
 from krita_codex_protocol import PathPolicyError
 
 from .bridge_client import BridgeCallError
+from .image_validation import validate_png_base64
 from .validation import InputError, bounded_int, finite_number, required_text
 
 ASSET_ACTIONS = {
@@ -349,16 +349,11 @@ class AssetServiceMixin:
         self, result: dict[str, Any]
     ) -> tuple[dict[str, Any], str]:
         png_base64 = result.pop("png_base64", None)
-        if not isinstance(png_base64, str):
-            raise BridgeCallError(
-                "INVALID_PREVIEW", "bridge response contains no PNG preview", {}
-            )
-        try:
-            png_size = len(base64.b64decode(png_base64, validate=True))
-        except ValueError as exc:
-            raise BridgeCallError(
-                "INVALID_PREVIEW", "bridge returned malformed PNG preview base64", {}
-            ) from exc
+        png_size = validate_png_base64(
+            png_base64,
+            missing_message="bridge response contains no PNG preview",
+            malformed_message="bridge returned malformed PNG preview base64",
+        )
         if png_size > self.config.preview_max_bytes:
             raise BridgeCallError(
                 "PREVIEW_TOO_LARGE", "preview exceeds configured byte limit", {}

@@ -3,7 +3,7 @@ from __future__ import annotations
 import hmac
 import json
 import threading
-from contextlib import suppress
+import time
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Protocol
@@ -15,6 +15,10 @@ from krita_codex_protocol import (
     BridgeResponse,
     ProtocolError,
 )
+
+_BODY_DRAIN_TIMEOUT_SECONDS = 0.25
+_BODY_DRAIN_CHUNK_BYTES = 64 * 1024
+_OVERSIZE_DRAIN_MAX_BYTES = 5 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             self._simple_error(411, "LENGTH_REQUIRED", "Content-Length is required")
             return
         if length > self.server.config.max_request_bytes:
+            self._discard_reasonable_oversized_body(length)
             self._simple_error(413, "REQUEST_TOO_LARGE", "Request exceeds configured limit")
             return
         self.connection.settimeout(self.server.config.request_timeout_seconds)
@@ -92,7 +97,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             release_here = True
             try:
                 dispatched = self.server.dispatcher.call(
-                    request, self.server.config.request_timeout_seconds
+                    request,
+                    self.server.config.timeout_for(request.operation, request.arguments),
                 )
                 response = dispatched.response
                 if dispatched.completion is not None:
@@ -136,11 +142,39 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             length = int(length_text) if length_text is not None else 0
         except ValueError:
             return
-        if not 0 < length <= self.server.config.max_request_bytes:
-            return
-        self.connection.settimeout(min(self.server.config.request_timeout_seconds, 0.25))
-        with suppress(TimeoutError, OSError):
-            self.rfile.read(length)
+        self._drain_body(length, maximum_bytes=self.server.config.max_request_bytes)
+
+    def _discard_reasonable_oversized_body(self, length: int) -> None:
+        configured_limit = self.server.config.max_request_bytes
+        drain_limit = min(
+            _OVERSIZE_DRAIN_MAX_BYTES,
+            max(configured_limit * 4, configured_limit + _BODY_DRAIN_CHUNK_BYTES),
+        )
+        self._drain_body(length, maximum_bytes=drain_limit)
+
+    def _drain_body(self, length: int, *, maximum_bytes: int) -> bool:
+        if not 0 < length <= maximum_bytes:
+            return False
+
+        timeout_seconds = min(
+            self.server.config.request_timeout_seconds,
+            _BODY_DRAIN_TIMEOUT_SECONDS,
+        )
+        deadline = time.monotonic() + timeout_seconds
+        remaining = length
+        while remaining > 0:
+            time_left = deadline - time.monotonic()
+            if time_left <= 0:
+                return False
+            self.connection.settimeout(time_left)
+            try:
+                chunk = self.rfile.read(min(remaining, _BODY_DRAIN_CHUNK_BYTES))
+            except (TimeoutError, OSError):
+                return False
+            if not chunk:
+                return False
+            remaining -= len(chunk)
+        return True
 
     def _simple_error(self, status: int, code: str, message: str) -> None:
         self._json_response(status, {"ok": False, "error": {"code": code, "message": message}})

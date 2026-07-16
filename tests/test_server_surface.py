@@ -10,11 +10,13 @@ from mcp.types import ImageContent
 from krita_codex_mcp.server import build_server
 from krita_codex_protocol import BridgeConfig
 
+PNG_BASE64 = "iVBORw0KGgpwYXlsb2Fk"
+
 
 class _FakeBridgeClient:
     async def execute(self, operation: str, _arguments: dict[str, Any]) -> dict[str, Any]:
         if operation in {"preview", "asset"}:
-            return {"png_base64": "aGVsbG8=", "width": 1, "height": 1}
+            return {"png_base64": PNG_BASE64, "width": 1, "height": 1}
         return {"operation": operation}
 
 
@@ -55,7 +57,7 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(content), 2)
         self.assertIsInstance(content[1], ImageContent)
         self.assertEqual(content[1].mimeType, "image/png")
-        self.assertEqual(content[1].data, "aGVsbG8=")
+        self.assertEqual(content[1].data, PNG_BASE64)
         self.assertEqual(structured["result"][1]["type"], "image")
 
     async def test_asset_export_returns_direct_image_content(self) -> None:

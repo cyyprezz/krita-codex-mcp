@@ -20,6 +20,46 @@ class BridgeConfigTests(unittest.TestCase):
         self.assertEqual(config.asset_batch_max_bytes, 268_435_456)
         self.assertEqual(config.asset_max_frames, 256)
         self.assertEqual(config.asset_render_max_pixels, 134_217_728)
+        self.assertEqual(config.timeout_for("state", {}), 30.0)
+        self.assertEqual(config.timeout_for("document", {"action": "open"}), 120.0)
+        self.assertEqual(config.timeout_for("document", {"action": "save"}), 120.0)
+        self.assertEqual(
+            config.timeout_for("asset", {"action": "export_animation"}), 180.0
+        )
+        self.assertEqual(config.timeout_for("save_export", {}), 180.0)
+
+    def test_rejects_timeout_classes_in_the_wrong_order(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaisesRegex(ConfigError, "open_save_timeout_seconds"),
+        ):
+            BridgeConfig.from_mapping(
+                {
+                    "token": "x" * 32,
+                    "allowed_roots": [directory],
+                    "request_timeout_seconds": 60,
+                    "open_save_timeout_seconds": 30,
+                }
+            )
+
+    def test_enforces_minimum_long_operation_timeouts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ConfigError, "open_save_timeout_seconds"):
+                BridgeConfig.from_mapping(
+                    {
+                        "token": "x" * 32,
+                        "allowed_roots": [directory],
+                        "open_save_timeout_seconds": 119,
+                    }
+                )
+            with self.assertRaisesRegex(ConfigError, "export_timeout_seconds"):
+                BridgeConfig.from_mapping(
+                    {
+                        "token": "x" * 32,
+                        "allowed_roots": [directory],
+                        "export_timeout_seconds": 179,
+                    }
+                )
 
     def test_rejects_excessive_asset_byte_limit(self) -> None:
         with (

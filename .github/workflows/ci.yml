@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows / Python 3.12
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          version: "0.11.16"
+          python-version: "3.12"
+          activate-environment: true
+
+      - name: Test, lint, and build
+        shell: pwsh
+        run: |
+          uv sync --locked --all-groups --python 3.12
+          $env:PYTHONPATH = "src"
+          python -m unittest discover -s tests -v
+          ruff check .
+          python -m build
