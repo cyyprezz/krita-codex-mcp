@@ -104,8 +104,13 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         shear_y_degrees: Annotated[float | None, Field(ge=-89, le=89)] = None,
         direction: Literal["horizontal", "vertical"] | None = None,
         transform_mode: Literal["mask", "direct"] = "mask",
+        response_mode: Literal["compact", "full"] = "compact",
+        checkpoint_reopen: bool = False,
     ) -> dict[str, Any]:
-        """Manage layers by UUID, including stack, properties, and guarded transformations."""
+        """Manage layers by UUID with compact replies, safe reparenting, and guarded transforms.
+
+        checkpoint_reopen requires an explicit document_id and an existing KRA path.
+        """
         return await tool_call(
             lambda: service.layers(
                 action=action,
@@ -133,6 +138,8 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
                 shear_y_degrees=shear_y_degrees,
                 direction=direction,
                 transform_mode=transform_mode,
+                response_mode=response_mode,
+                checkpoint_reopen=checkpoint_reopen,
             )
         )
 

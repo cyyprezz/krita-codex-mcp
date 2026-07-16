@@ -270,6 +270,15 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
 
+    async def test_layer_full_response_mode_is_forwarded_explicitly(self) -> None:
+        await self.service.layers(
+            action="rename",
+            layer_id="layer-1",
+            name="Compact opt-out",
+            response_mode="full",
+        )
+        self.assertEqual(self.client.calls[-1][1]["response_mode"], "full")
+
     async def test_layer_translate_fills_missing_axis(self) -> None:
         await self.service.layers(action="translate", layer_id="layer-1", offset_x=12)
         self.assertEqual(
@@ -585,6 +594,25 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
                 height=16384,
             )
         self.assertEqual(len(self.client.calls), call_count)
+
+    async def test_layer_direct_transform_can_request_safe_checkpoint_reopen(self) -> None:
+        with self.assertRaisesRegex(InputError, "requires document_id"):
+            await self.service.layers(
+                action="scale",
+                layer_id="layer-1",
+                width=32,
+                height=48,
+                transform_mode="direct",
+                checkpoint_reopen=True,
+            )
+
+        with self.assertRaisesRegex(InputError, "transform_mode=direct"):
+            await self.service.layers(
+                action="rotate",
+                layer_id="layer-1",
+                angle_degrees=15,
+                checkpoint_reopen=True,
+            )
 
     async def test_draw_normalizes_native_shape_resources(self) -> None:
         await self.service.draw(

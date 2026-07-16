@@ -359,8 +359,7 @@ class PaintingOperationsMixin:
             for _ in range(count):
                 undo_action.trigger()
                 completed += 1
-            doc.waitForDone()
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
         except Exception:
             pass
         return completed

@@ -35,6 +35,9 @@ class PluginContractTests(unittest.TestCase):
         ):
             self.assertIn(call, source)
         self.assertIn("QPoint(round(", source)
+        self.assertIn('"DRAW_NO_CHANGE"', source)
+        self.assertIn("node.pixelData(", source)
+        self.assertIn('"verified_content_change": True', source)
         self.assertNotIn("setPixelData", source)
 
     def test_color_surface_uses_selection_fill_and_undoable_filter_strokes(self) -> None:
@@ -134,6 +137,7 @@ class PluginContractTests(unittest.TestCase):
     def test_layer_asset_workflow_uses_native_node_operations(self) -> None:
         source = plugin_source(
             "layer_service.py",
+            "layer_transaction.py",
             "layer_transform_service.py",
             "transform_mask_service.py",
         )
@@ -141,8 +145,10 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("parent.addChildNode(duplicate, node)", source)
         self.assertIn("if not node.remove()", source)
         self.assertIn("not source_parent.removeChildNode(node)", source)
-        self.assertIn("if not parent.addChildNode(node, above)", source)
-        self.assertIn("source_parent.addChildNode(node, source_anchor)", source)
+        self.assertIn("destination_parent.addChildNode(node, destination_anchor)", source)
+        self.assertIn("moved = service._find_node(doc, original_id)", source)
+        self.assertIn("source_parent.addChildNode(recovery, source_anchor)", source)
+        self.assertIn('"recovered_from_backup": recovered', source)
         self.assertIn("node.move(int(position.x()) + offset_x", source)
         self.assertIn("node.setAlphaLocked", source)
         self.assertIn("node.setBlendingMode", source)
@@ -265,6 +271,7 @@ class PluginContractTests(unittest.TestCase):
             "drawing_service.py",
             "editing_service.py",
             "layer_service.py",
+            "layer_transaction.py",
             "layer_transform_service.py",
             "painting_service.py",
             "package_service.py",

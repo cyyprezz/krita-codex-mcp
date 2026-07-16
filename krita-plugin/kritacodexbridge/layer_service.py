@@ -10,6 +10,7 @@ from ._service_helpers import (
     _safe_call,
 )
 from .errors import KritaOperationError
+from .layer_transaction import reparent_layer_transactionally
 
 
 class LayerOperationsMixin:
@@ -33,9 +34,14 @@ class LayerOperationsMixin:
 
     def layers(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
         action = arguments.get("action")
+        response_mode = arguments.get("response_mode", "compact")
+        if response_mode not in {"compact", "full"}:
+            raise KritaOperationError(
+                "INVALID_ARGUMENT", "response_mode must be compact or full"
+            )
         doc = self._target_document(arguments, activate=action != "read")
         if action == "read":
-            return self._layer_result(doc, action)
+            return self._layer_result(doc, action, response_mode="full")
         if action == "create":
             name = _required_text(arguments.get("name"), "name", 200)
             kind = arguments.get("kind")
@@ -61,7 +67,19 @@ class LayerOperationsMixin:
                 raise KritaOperationError("LAYER_CREATE_FAILED", "Krita could not create the layer")
             doc.setActiveNode(node)
             self._finish_mutation(doc)
-            return self._layer_result(doc, action, affected=node)
+            created = self._find_node(doc, self._node_id(node))
+            if created is None or not self._same_node(created.parentNode(), parent):
+                raise KritaOperationError(
+                    "LAYER_CREATE_FAILED",
+                    "Krita did not attach the new layer to the requested parent",
+                    {
+                        "layer_id": self._node_id(node),
+                        "parent_id": self._node_id(parent),
+                    },
+                )
+            return self._layer_result(
+                doc, action, affected=created, response_mode=response_mode
+            )
 
         layer_id = _required_text(arguments.get("layer_id"), "layer_id", 80)
         node = self._find_node(doc, layer_id)
@@ -101,7 +119,9 @@ class LayerOperationsMixin:
                 duplicate.setName(_required_text(arguments.get("name"), "name", 200))
             doc.setActiveNode(duplicate)
             self._finish_mutation(doc)
-            result = self._layer_result(doc, action, affected=duplicate)
+            result = self._layer_result(
+                doc, action, affected=duplicate, response_mode=response_mode
+            )
             result["source_layer_id"] = self._node_id(node)
             return result
         elif action == "delete":
@@ -122,7 +142,7 @@ class LayerOperationsMixin:
             if fallback is not None:
                 doc.setActiveNode(fallback)
             self._finish_mutation(doc)
-            result = self._layer_result(doc, action)
+            result = self._layer_result(doc, action, response_mode=response_mode)
             result["deleted_layer_id"] = deleted_id
             return result
         elif action == "reorder":
@@ -168,17 +188,19 @@ class LayerOperationsMixin:
                 -1,
             )
             source_anchor = source_siblings[source_index - 1] if source_index > 0 else None
-            if source_index < 0 or not source_parent.removeChildNode(node):
+            if source_index < 0:
                 raise KritaOperationError(
-                    "LAYER_REORDER_FAILED", "Krita could not detach the layer from its parent"
+                    "LAYER_REORDER_FAILED", "Layer is not present in its source parent"
                 )
-            if not parent.addChildNode(node, above):
-                rolled_back = bool(source_parent.addChildNode(node, source_anchor))
-                raise KritaOperationError(
-                    "LAYER_REORDER_FAILED",
-                    "Krita could not insert the layer at the requested destination",
-                    {"rolled_back": rolled_back},
-                )
+            node = reparent_layer_transactionally(
+                self,
+                doc,
+                node,
+                source_parent=source_parent,
+                source_anchor=source_anchor,
+                destination_parent=parent,
+                destination_anchor=above,
+            )
             doc.setActiveNode(node)
         elif action == "translate":
             offset_x = _bounded_int(arguments.get("offset_x"), "offset_x", -1_000_000, 1_000_000)
@@ -335,8 +357,7 @@ class LayerOperationsMixin:
             source_id = self._node_id(node)
             below_id = self._node_id(below)
             node.mergeDown()
-            doc.waitForDone()
-            doc.refreshProjection()
+            self._synchronize_projection(doc)
             merged_siblings = list(parent.childNodes())
             if len(merged_siblings) != len(siblings) - 1:
                 raise KritaOperationError(
@@ -350,7 +371,9 @@ class LayerOperationsMixin:
             merged = merged_siblings[source_index - 1]
             doc.setActiveNode(merged)
             self._finish_mutation(doc)
-            result = self._layer_result(doc, action, affected=merged)
+            result = self._layer_result(
+                doc, action, affected=merged, response_mode=response_mode
+            )
             result["source_layer_id"] = source_id
             result["merged_with_layer_id"] = below_id
             result["metadata_dropped"] = True
@@ -358,7 +381,9 @@ class LayerOperationsMixin:
         else:
             raise KritaOperationError("INVALID_ARGUMENT", f"Unsupported layer action: {action}")
         self._finish_mutation(doc)
-        result = self._layer_result(doc, str(action), affected=node)
+        result = self._layer_result(
+            doc, str(action), affected=node, response_mode=response_mode
+        )
         result.update(operation_details)
         return result
 
@@ -426,20 +451,58 @@ class LayerOperationsMixin:
             ],
         }
 
-    def _layer_result(self, doc, action: str, affected=None) -> dict[str, Any]:
+    def _layer_result(
+        self,
+        doc,
+        action: str,
+        affected=None,
+        *,
+        response_mode: str = "compact",
+    ) -> dict[str, Any]:
         active = doc.activeNode()
         result = {
             "document_id": self._document_id(doc),
             "document_file_name": doc.fileName(),
             "action": action,
+            "response_mode": response_mode,
             "active_layer_id": self._node_id(active) if active else None,
-            "layers": self._layer_forest(doc),
         }
+        if response_mode == "full":
+            result["layers"] = self._layer_forest(doc)
         if affected is not None:
             result["affected_layer_id"] = self._node_id(affected)
+            result["affected_layer"] = self._serialize_layer_summary(affected)
         return result
 
+    def _serialize_layer_summary(self, node) -> dict[str, Any]:
+        parent = node.parentNode()
+        siblings = list(parent.childNodes()) if parent is not None else []
+        stack_index = next(
+            (
+                index
+                for index, sibling in enumerate(siblings)
+                if self._same_node(sibling, node)
+            ),
+            -1,
+        )
+        bounds = node.bounds()
+        return {
+            "id": self._node_id(node),
+            "parent_id": self._node_id(parent) if parent is not None else None,
+            "stack_index": stack_index,
+            "name": node.name(),
+            "type": node.type(),
+            "bounds": {
+                "x": int(bounds.x()),
+                "y": int(bounds.y()),
+                "width": int(bounds.width()),
+                "height": int(bounds.height()),
+            },
+            "visible": bool(node.visible()),
+            "locked": bool(_safe_call(node, "locked", default=False)),
+            "child_count": len(node.childNodes()),
+        }
+
     def _finish_mutation(self, doc) -> None:
-        doc.waitForDone()
-        doc.refreshProjection()
+        self._synchronize_projection(doc)
         self.bridge_revision += 1
