@@ -125,7 +125,11 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("node.setPixelData", canvas)
 
     def test_layer_asset_workflow_uses_native_node_operations(self) -> None:
-        source = plugin_source("layer_service.py", "layer_transform_service.py")
+        source = plugin_source(
+            "layer_service.py",
+            "layer_transform_service.py",
+            "transform_mask_service.py",
+        )
         self.assertIn("duplicate = node.duplicate()", source)
         self.assertIn("parent.addChildNode(duplicate, node)", source)
         self.assertIn("if not node.remove()", source)
@@ -259,6 +263,7 @@ class PluginContractTests(unittest.TestCase):
             "package_service.py",
             "region_service.py",
             "service_context.py",
+            "transform_mask_service.py",
         ):
             path = PLUGIN_ROOT / name
             self.assertTrue(path.is_file(), name)

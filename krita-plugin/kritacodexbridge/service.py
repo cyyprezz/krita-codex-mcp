@@ -20,6 +20,7 @@ from .package_service import PackageOperationsMixin
 from .painting_service import PaintingOperationsMixin
 from .region_service import RegionOperationsMixin
 from .service_context import ServiceContextMixin
+from .transform_mask_service import TransformMaskOperationsMixin
 
 
 class KritaService(
@@ -27,6 +28,7 @@ class KritaService(
     CanvasOperationsMixin,
     EditingOperationsMixin,
     LayerOperationsMixin,
+    TransformMaskOperationsMixin,
     LayerTransformOperationsMixin,
     PaintingOperationsMixin,
     DrawingOperationsMixin,
