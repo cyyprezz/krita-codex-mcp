@@ -13,6 +13,7 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe .\scripts\live_editing_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_regions_e2e.py --output-dir "C:\absolute\allowed\root"
 .\.venv\Scripts\python.exe .\scripts\live_creation_e2e.py --output-dir "C:\absolute\allowed\root"
+.\.venv\Scripts\python.exe .\scripts\live_transform_mask_e2e.py
 .\.venv\Scripts\python.exe .\scripts\live_mcp_e2e.py
 ```
 

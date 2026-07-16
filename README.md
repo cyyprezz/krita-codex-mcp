@@ -91,6 +91,10 @@ enables document batch mode so no format dialog can block the local bridge.
 See [Windows installation](docs/windows-installation.md), [protocol](docs/protocol.md),
 [security](SECURITY.md), and the [Krita E2E checklist](docs/krita-e2e-checklist.md).
 
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Nicklas Desens.
+
 ## Plugin structure
 
 The Qt-main-thread bridge keeps `service.py` as a small composition and dispatch entrypoint.

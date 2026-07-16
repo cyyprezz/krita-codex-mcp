@@ -6,7 +6,14 @@ Prerequisites:
 - `uv` available on `PATH`.
 - A local Codex client (desktop app, CLI, or IDE extension).
 
-From this repository, run:
+Clone the repository and run the installer:
+
+```powershell
+git clone https://github.com/cyyprezz/krita-codex-mcp.git
+Set-Location .\krita-codex-mcp
+```
+
+Then run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1 `

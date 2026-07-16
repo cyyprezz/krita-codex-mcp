@@ -27,9 +27,18 @@ class BridgeCallError(RuntimeError):
         return f"{self.code}: {self.message}"
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 class BridgeClient:
     def __init__(self, config: BridgeConfig) -> None:
         self.config = config
+        self._opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}),
+            _NoRedirectHandler(),
+        )
 
     async def execute(self, operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         request = BridgeRequest(operation=operation, arguments=arguments)
@@ -53,7 +62,7 @@ class BridgeClient:
             },
         )
         try:
-            with urllib.request.urlopen(  # noqa: S310 - URL is fixed to validated loopback config
+            with self._opener.open(
                 http_request, timeout=self.config.request_timeout_seconds + 2.0
             ) as response:
                 body = response.read(self.config.max_response_bytes + 1)

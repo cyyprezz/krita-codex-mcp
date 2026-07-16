@@ -9,10 +9,15 @@ description = "Windows-first local MCP bridge for reliable Krita control from Co
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
-authors = [{ name = "krita-codex-mcp contributors" }]
+authors = [{ name = "Nicklas Desens" }]
 dependencies = [
   "mcp>=1.12,<2",
 ]
+
+[project.urls]
+Homepage = "https://github.com/cyyprezz/krita-codex-mcp"
+Repository = "https://github.com/cyyprezz/krita-codex-mcp.git"
+Issues = "https://github.com/cyyprezz/krita-codex-mcp/issues"
 
 [project.scripts]
 krita-codex-mcp = "krita_codex_mcp.server:main"
@@ -24,6 +29,21 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/krita_codex_mcp", "src/krita_codex_protocol"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/.codex/config.toml.example",
+  "/docs",
+  "/krita-plugin",
+  "/scripts",
+  "/src",
+  "/tests",
+  "/LICENSE",
+  "/README.md",
+  "/SECURITY.md",
+  "/pyproject.toml",
+  "/uv.lock",
+]
 
 [tool.ruff]
 line-length = 100

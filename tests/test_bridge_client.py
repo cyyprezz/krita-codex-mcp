@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 import urllib.error
+import urllib.request
 from unittest.mock import patch
 
 from krita_codex_mcp.bridge_client import BridgeCallError, BridgeClient
@@ -46,7 +47,7 @@ class BridgeClientTests(unittest.TestCase):
             return _FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8"))
 
         client = BridgeClient(self.config)
-        with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        with patch.object(client._opener, "open", side_effect=fake_urlopen):
             result = client._execute_sync(
                 __import__("krita_codex_protocol").BridgeRequest(operation="state", arguments={})
             )
@@ -62,8 +63,9 @@ class BridgeClientTests(unittest.TestCase):
         response = BridgeResponse(request_id=other.request_id, result={})
         client = BridgeClient(self.config)
         with (
-            patch(
-                "urllib.request.urlopen",
+            patch.object(
+                client._opener,
+                "open",
                 return_value=_FakeHTTPResponse(json.dumps(response.to_mapping()).encode("utf-8")),
             ),
             self.assertRaisesRegex(BridgeCallError, "RESPONSE_MISMATCH"),
@@ -86,12 +88,44 @@ class BridgeClientTests(unittest.TestCase):
         )
         client = BridgeClient(self.config)
         with (
-            patch("urllib.request.urlopen", side_effect=error),
+            patch.object(client._opener, "open", side_effect=error),
             self.assertRaises(BridgeCallError) as raised,
         ):
             client._execute_sync(request)
         self.assertEqual(raised.exception.code, "UNAUTHORIZED")
         self.assertEqual(raised.exception.details["http_status"], 401)
+
+    def test_uses_a_proxy_free_non_redirecting_opener(self) -> None:
+        with patch(
+            "urllib.request.getproxies",
+            return_value={"http": "http://proxy.invalid:8080"},
+        ) as getproxies:
+            client = BridgeClient(self.config)
+        getproxies.assert_not_called()
+
+        proxy_handlers = [
+            handler
+            for handler in client._opener.handlers
+            if isinstance(handler, urllib.request.ProxyHandler)
+        ]
+        redirect_handlers = [
+            handler
+            for handler in client._opener.handlers
+            if isinstance(handler, urllib.request.HTTPRedirectHandler)
+        ]
+
+        self.assertEqual(proxy_handlers, [])
+        self.assertEqual(len(redirect_handlers), 1)
+        self.assertIsNone(
+            redirect_handlers[0].redirect_request(
+                None,
+                None,
+                302,
+                "Found",
+                {},
+                "https://example.invalid/token-leak",
+            )
+        )
 
 
 if __name__ == "__main__":

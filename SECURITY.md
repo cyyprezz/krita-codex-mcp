@@ -1,5 +1,17 @@
 # Security model
 
+## Reporting a vulnerability
+
+Please do not open a public issue for a suspected vulnerability. Send a private report to
+`nicklas@desens.dev` with affected versions, reproduction steps and potential impact. Please allow
+time for assessment and a fix before public disclosure.
+
+## Supported versions
+
+This project is pre-1.0. Security fixes are provided for the current `main` branch only.
+
+## Design and operating boundaries
+
 This spike is designed for one Windows user controlling one local Krita process.
 
 - The MCP transport is STDIO; the internal bridge binds only to `127.0.0.1`.
