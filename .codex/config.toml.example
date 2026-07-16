@@ -1,5 +1,5 @@
 [mcp_servers.krita]
-command = "C:\\absolute\\path\\krita-codex-mcp\\.venv\\Scripts\\krita-codex-mcp.exe"
-cwd = "C:\\absolute\\path\\krita-codex-mcp"
-startup_timeout_sec = 10
+command = "uvx"
+args = ["--from", "krita-codex-mcp==0.1.0", "krita-codex-mcp"]
+startup_timeout_sec = 60
 tool_timeout_sec = 210

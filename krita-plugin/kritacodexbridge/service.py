@@ -14,6 +14,7 @@ from .document_service import DocumentOperationsMixin
 from .drawing_service import DrawingOperationsMixin
 from .editing_service import EditingOperationsMixin
 from .errors import KritaOperationError
+from .installation_info import loaded_installation_info
 from .layer_service import LayerOperationsMixin
 from .layer_transform_service import LayerTransformOperationsMixin
 from .package_service import PackageOperationsMixin
@@ -51,6 +52,7 @@ class KritaService(
         self._transform_mask_creation_counts: dict[str, int] = {}
         self._created_transform_mask_ids: dict[str, set[str]] = {}
         self._layer_transform_backend_session: str | None = None
+        self._installation_info = loaded_installation_info()
 
     def execute(self, operation: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
         handlers = {
@@ -75,4 +77,8 @@ class KritaService(
             )
         result = handler(arguments)
         result["bridge_revision"] = self.bridge_revision
+        result["bridge_distribution_version"] = self._installation_info[
+            "distribution_version"
+        ]
+        result["bridge_protocol_version"] = self._installation_info["protocol_version"]
         return result

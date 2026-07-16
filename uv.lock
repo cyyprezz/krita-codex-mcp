@@ -321,7 +321,6 @@ wheels = [
 
 [[package]]
 name = "krita-codex-mcp"
-version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "mcp" },

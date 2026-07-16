@@ -16,6 +16,21 @@ This spike is designed for one Windows user controlling one local Krita process.
 
 - The MCP transport is STDIO; the internal bridge binds only to `127.0.0.1`.
 - Every bridge request requires a random bearer token from the current user's LocalAppData.
+- The wheel and generated installation manifest contain no bearer token or local configuration.
+  Manifest paths are relative and hash only the managed plugin, protocol and desktop payload.
+- Install and update refuse to replace files while the authenticated bridge is active. The
+  installer never closes Krita. Runtime responses identify the distribution and wire-protocol
+  versions actually loaded by Krita, and the MCP client fails closed on a mismatch.
+- On Windows, the installer must bind `127.0.0.1` with `SO_EXCLUSIVEADDRUSE` on every relevant old
+  and new configured bridge port before staging or recovery mutation. It holds all reservations
+  through journaled swaps/removes, validation and cleanup. A bind failure blocks fail-closed and is
+  never overridden by connection-probe results.
+- Install, update and uninstall are serialized by an operating-system file lock that is released
+  with its process handle. Each component mutation is bracketed by an atomically replaced,
+  fsync-backed journal; an interrupted transaction is recovered before the next mutation. If safe
+  recovery is impossible, the journal and backups remain in place and their paths are reported.
+- A previewed Codex configuration change is applied only if both file existence and content still
+  match the preview snapshot immediately before backup and replacement.
 - The protocol has a fixed operation allow-list. There is no arbitrary Python, shell or Krita
   script execution operation.
 - Both the MCP process and Krita plugin validate open/save/export paths after canonicalization.

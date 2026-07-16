@@ -40,29 +40,59 @@ stroke APIs. If the installed Krita build lacks a required method, the operation
 
 Use this order for a real Krita session:
 
-1. Run `scripts/install.ps1` with one or more narrow, writable allowed roots.
+1. Run the wheel-bundled `krita-codex-install install` command with at least one explicit,
+   narrow `--allowed-root`.
 2. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
 3. Restart Krita so the installed plugin and shared protocol package are loaded together.
-4. Run `scripts/check-installation.ps1` and require `Ready for productive use.`
-5. Add the MCP block printed by the installer to your Codex configuration.
-6. Restart Codex, verify `krita_state` and `krita_preview`, and only then start normal work.
+4. Run `krita-codex-install check` and require `Ready for productive use.`
+5. Preview the checkout-free, exactly version-pinned `uvx` Codex block with
+   `krita-codex-install codex-config`.
+6. Apply it only after explicit confirmation, restart Codex, verify `krita_state` and
+   `krita_preview`, and only then start normal work.
 
-For a personal installation, put the block in the user-level
-`C:\Users\<you>\.codex\config.toml`. This is the recommended option because the server is then
-available to all local Codex tasks and Git worktrees. A trusted checkout may instead use
-`.codex/config.toml`, but that machine-specific file is intentionally ignored by Git and is not
-copied into new worktrees. Never commit a configuration containing personal absolute paths. See
-the [Windows installation guide](docs/windows-installation.md#5-configure-codex-and-start-work)
-for the exact block and both scopes.
+For a local wheel build, the initial installation looks like:
 
-The preflight checks the local config and token, installed files, MCP environment, loopback port,
-authentication and `krita_state`. It creates a disposable document, validates direct PNG preview
-bytes, exports a temporary PNG beneath an allowed root, closes the document and removes the file.
-It restores the previously active document and does not edit Codex configuration or contact an
-external service.
+```powershell
+uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
+  krita-codex-install install `
+  --allowed-root "C:\Krita Work"
+```
+
+Once the same version is published, replace the wheel path with
+`krita-codex-mcp==0.1.0`. Install and update never close Krita. If the authenticated bridge is
+running, replacement is rejected before any installed files are changed and Krita must be closed
+manually. On Windows, safety is decided by an exclusive bind to every relevant old and new bridge
+port, not by a connection attempt. The installer holds those port reservations from before staging
+through journaled swaps, validation and cleanup. A failed reservation blocks replacement
+fail-closed and asks the user to close Krita or free the port.
+
+For a personal installation, use the user-level `C:\Users\<you>\.codex\config.toml`. This is the
+recommended option because the server is then available to all local Codex tasks and Git
+worktrees. The generated block uses `uvx`, has no checkout `cwd`, and pins the same exact
+distribution version as the installed plugin. The installer only changes that file after showing
+the full preview and receiving explicit confirmation. Unmarked or conflicting Krita entries are
+never overwritten. Never commit personal configuration. See the
+[Windows installation guide](docs/windows-installation.md#4-configure-codex) for details.
+
+The preflight checks local configuration, the complete installed hash manifest, wheel/plugin/
+protocol versions, loopback port, authentication and `krita_state`. The running plugin reports the
+distribution and protocol version loaded by Krita without adding an MCP tool. The check creates a
+disposable document, validates direct PNG preview bytes, exports a temporary PNG beneath an allowed
+root, closes the document and removes the file. It restores the previously active document and does
+not edit Codex configuration or contact an external service.
 
 ## Current status
 
+- The wheel now contains the complete Krita plugin, desktop descriptor and shared protocol, plus a
+  Python-native transactional installer usable from a local wheel or an exactly pinned `uvx`
+  invocation without a Git checkout.
+- Installation manifests contain only relative managed paths, distribution/protocol versions and
+  SHA-256 hashes. Configuration and bearer tokens remain outside the wheel and manifest.
+- Package install, update, check and uninstall share one Python implementation. The PowerShell
+  scripts are compatibility wrappers for trusted repository checkouts.
+- Mutating commands hold a non-blocking process lock. A fsync-backed, atomically replaced journal
+  records every target-to-backup and stage-to-target boundary. The next mutating command restores
+  the previous installation after an interrupted install or uninstall before starting new work.
 - Protocol, configuration, dual input/output path policy, bridge client and thirteen-tool MCP surface
   implemented.
 - Krita plugin implements state, preview, persistent layer-tree editing, native path painting, KRA
@@ -176,4 +206,6 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\python.exe -m build
 ```
 
-Installation and development do not publish packages, commits or releases.
+Inspect both wheel and sdist contents, build a wheel again from the sdist, and run the local-wheel
+`uvx` smoke before any release. Installation and development do not publish packages, commits or
+releases.

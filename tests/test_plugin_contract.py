@@ -93,6 +93,15 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn("RotatingFileHandler", logging_source)
         self.assertNotIn("config.token", extension)
 
+    def test_loaded_plugin_reports_installed_distribution_and_protocol_versions(self) -> None:
+        service = (PLUGIN_ROOT / "service.py").read_text(encoding="utf-8")
+        installation_info = (PLUGIN_ROOT / "installation_info.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('result["bridge_distribution_version"]', service)
+        self.assertIn('result["bridge_protocol_version"]', service)
+        self.assertIn('Path(__file__).with_name("_install_info.json")', installation_info)
+
     def test_expanded_surface_uses_native_krita_apis(self) -> None:
         source = plugin_source(
             "document_service.py",
