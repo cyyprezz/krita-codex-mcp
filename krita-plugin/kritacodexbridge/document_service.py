@@ -14,6 +14,7 @@ from ._service_helpers import (
     _required_text,
     _safe_call,
 )
+from .compatibility import build_runtime_compatibility
 from .errors import KritaOperationError
 
 
@@ -48,15 +49,41 @@ class DocumentOperationsMixin:
                 "native_paint_line": bool(active and hasattr(active, "paintLine")),
                 "native_paint_path": bool(active and hasattr(active, "paintPath")),
             },
+            "runtime_compatibility": build_runtime_compatibility(app, doc),
         }
 
     def document(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
         app = Krita.instance()
         action = arguments.get("action")
-        if action not in {"list", "create", "open", "activate", "save", "close"}:
+        if action not in {
+            "list",
+            "compatibility",
+            "create",
+            "open",
+            "activate",
+            "save",
+            "close",
+        }:
             raise KritaOperationError("INVALID_ARGUMENT", f"Unsupported document action: {action}")
         if action == "list":
             return self._document_result(app, action)
+        if action == "compatibility":
+            document_id = arguments.get("document_id")
+            if document_id is None:
+                doc = app.activeDocument()
+            else:
+                doc = self._find_document(
+                    app, _required_text(document_id, "document_id", 80)
+                )
+                if doc is None:
+                    raise KritaOperationError(
+                        "DOCUMENT_NOT_FOUND", "Document ID was not found"
+                    )
+            return {
+                "action": action,
+                "document_id": self._document_id(doc) if doc is not None else None,
+                "runtime_compatibility": build_runtime_compatibility(app, doc),
+            }
         if action == "create":
             width = _bounded_int(
                 arguments.get("width"), "width", 1, self.config.document_max_dimension

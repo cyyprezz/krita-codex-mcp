@@ -14,7 +14,8 @@ authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listen
 `127.0.0.1`, validates a shared bearer token, and dispatches every Krita API call to Qt's main
 thread.
 
-This repository is a Windows-first integration validated against Krita 5.3.2.1. It deliberately
+This repository is a Windows-first integration with a capability-based runtime compatibility
+check. Krita 5.3.2.1 is a tested build, not a hard version requirement. The server deliberately
 exposes a small set of cohesive tools instead of a large collection of micro-tools:
 
 | Tool | Purpose |
@@ -23,7 +24,7 @@ exposes a small set of cohesive tools instead of a large collection of micro-too
 | `krita_preview` | Whole-canvas or pixel-precise cropped PNG returned directly as MCP image content |
 | `krita_canvas` | Sample colors; resize, scale, crop, rotate or flip; import editable raster layers |
 | `krita_edit` | Create/refine/move selections; native copy, cut, paste, selection-to-layer, fill and clear |
-| `krita_document` | List, create, open, activate, checkpoint-save and explicitly close documents |
+| `krita_document` | Inspect runtime compatibility; list, create, open, activate, save and close documents |
 | `krita_layers` | Read/edit the layer tree, safely reparent, and transform layers by stable UUID |
 | `krita_history` | Read undo/redo state and execute bounded undo or redo steps |
 | `krita_brush` | Read/set native brush state and search installed Krita presets |
@@ -40,16 +41,18 @@ Codex -> local STDIO MCP process -> authenticated 127.0.0.1 HTTP bridge
 
 The bridge has no arbitrary Python execution tool and no direct pixel painting fallback. Actual
 painting, shapes, replacement fills and correction filters go through native Krita actions or
-stroke APIs. If the installed Krita build lacks a required method, the operation fails closed.
+stroke APIs. If the running Krita build lacks a feature, `krita_state` and
+`krita_document(action="compatibility")` report the affected tools. Calling that feature returns a
+structured error; the bridge never silently switches to a different rendering backend.
 
 ## Quick start
 
-This requires Krita 5.3.2.1 and [`uv`/`uvx`](https://docs.astral.sh/uv/getting-started/installation/)
-on `PATH`. Close Krita, make sure the allowed directory already exists, and install the current
-release from PyPI:
+This requires a Windows Krita build that passes the live compatibility check and
+[`uv`/`uvx`](https://docs.astral.sh/uv/getting-started/installation/) on `PATH`. Close Krita, make
+sure the allowed directory already exists, and install the current release from PyPI:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" `
+uvx --from "krita-codex-mcp==0.2.0" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
@@ -58,8 +61,8 @@ Then use this order for a real Krita session:
 
 1. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
 2. Restart Krita so the installed plugin and shared protocol package are loaded together.
-3. Run the same version's `krita-codex-install check` and require
-   `Ready for productive use.`
+3. Run the same version's `krita-codex-install check` and require either
+   `Ready for productive use.` or the explicit limited-mode success message.
 4. Preview the checkout-free, exactly version-pinned `uvx` Codex block with
    `krita-codex-install codex-config`.
 5. Apply it only after explicit confirmation, restart Codex, verify `krita_state` and
@@ -78,11 +81,16 @@ never overwritten. Never commit personal configuration. See the
 [Windows installation guide](docs/windows-installation.md#4-configure-codex) for details.
 
 The preflight checks local configuration, the complete installed hash manifest, wheel/plugin/
-protocol versions, loopback port, authentication and `krita_state`. The running plugin reports the
-distribution and protocol version loaded by Krita without adding an MCP tool. The check creates a
-disposable document, validates direct PNG preview bytes, exports a temporary PNG beneath an allowed
-root, closes the document and removes the file. It restores the previously active document and does
-not edit Codex configuration or contact an external service.
+protocol versions, loopback port, authentication and the running Krita capability profile. The
+running plugin reports the distribution, protocol and Krita versions without adding an MCP tool.
+The check creates a disposable document, verifies a new paint layer, native drawing, Undo/Redo,
+transactional reparenting, direct PNG preview bytes and temporary KRA/PNG output beneath an allowed
+root. It restores the previously active document and removes every temporary file.
+
+An unknown Krita version is accepted when all critical capabilities pass. Missing optional
+features produce `limited` warnings naming the affected MCP tools; missing projection, persistence,
+stable layer-tree or document-lifecycle APIs remain critical. The same structured report is
+available to Codex through `krita_state`, so it can avoid unavailable operations.
 
 ## Capabilities and Krita limits
 
@@ -91,7 +99,8 @@ layer editing, selections, color operations, KRA/PNG output, and Unity-oriented 
 tileset and named-region packages. Preview and asset operations return PNG images directly to the
 MCP caller. Re-export preserves Unity `.meta` sidecars for stable generated filenames.
 
-Krita 5.3.2.1 imposes several safety limits:
+The tested Krita 5.3.2.1 build imposes several safety limits. Other builds are evaluated at runtime
+and may report different available features:
 
 - Free layer scale, rotate, shear and crop operations are not native Undo commands. The bridge
   creates a hidden backup layer and blocks a second direct transform until the KRA is saved,

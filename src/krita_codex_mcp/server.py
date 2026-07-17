@@ -15,6 +15,8 @@ from .service import KritaService
 SERVER_INSTRUCTIONS = (
     "Control the currently active Krita document through a local authenticated bridge. "
     "Call krita_state before mutating when layer IDs or canvas bounds may be stale. "
+    "Read runtime_compatibility in krita_state and avoid tools or actions listed as affected "
+    "when the running Krita build is limited. "
     "Use krita_preview after visual changes. File writes are restricted to configured roots. "
     "bridge_revision counts bridge mutations only, not manual edits in Krita."
 )

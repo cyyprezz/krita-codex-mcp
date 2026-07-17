@@ -72,18 +72,34 @@ def run(arguments: Sequence[str] | None = None) -> int:
                 port=args.port,
                 reset_config=args.reset_config,
             )
-            print("Installation complete. Close and restart Krita before running check.")
+            print(
+                "Installation complete. Krita compatibility is pending; close and restart "
+                "Krita before running check."
+            )
         elif args.command == "update":
             manager.update()
             print("Update complete. Configuration and token were preserved.")
-            print("Close and restart Krita before running check.")
+            print("Krita compatibility is pending; close and restart Krita before running check.")
         elif args.command == "check":
             if args.offline:
                 run_offline_preflight(paths, __version__)
                 print("Offline installation check: OK")
             else:
-                run_live_preflight(paths, __version__)
-                print("Ready for productive use.")
+                result = run_live_preflight(paths, __version__)
+                print(
+                    f"Krita {result.krita_version}: {result.status} "
+                    f"(compatibility profile {result.profile_version}, {result.validation})."
+                )
+                for issue in result.issues:
+                    affected = ", ".join(str(item) for item in issue["affected_tools"])
+                    print(
+                        f"WARNING {issue['code']} [{affected}]: {issue['message']}",
+                        file=sys.stderr,
+                    )
+                if result.status == "limited":
+                    print("Ready for productive use with the reported limitations.")
+                else:
+                    print("Ready for productive use.")
         elif args.command == "uninstall":
             manager.uninstall(remove_config=args.remove_config)
             print("Uninstall complete. User artwork and allowed roots were not touched.")

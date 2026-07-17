@@ -1,12 +1,13 @@
 # Windows installation
 
-The supported production target is Krita 5.3.2.1 on Windows. The Python wheel contains the
-STDIO MCP server, the dependency-free shared protocol package, the complete Krita plugin and the
-wheel-native installation manager. A Git checkout is not required for a package installation.
+Krita compatibility is checked against the running Windows installation instead of being pinned
+to one application version. Krita 5.3.2.1 is the currently tested build. The Python wheel contains
+the STDIO MCP server, the dependency-free shared protocol package, the complete Krita plugin and
+the wheel-native installation manager. A Git checkout is not required for a package installation.
 
 Prerequisites:
 
-- Krita 5.3.2.1;
+- a Windows Krita installation that passes the live compatibility check;
 - `uv` and `uvx` on `PATH`;
 - a local Codex desktop app, CLI or IDE extension;
 - one or more narrow local directories for KRA and export access.
@@ -20,7 +21,7 @@ winget install --id=astral-sh.uv -e
 The [official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 lists alternative installation methods.
 
-The examples below use the current stable release, `0.1.1`, from
+The examples below use release `0.2.0` from
 [PyPI](https://pypi.org/project/krita-codex-mcp/). Always keep the installer, Krita plugin and
 Codex server pinned to the same exact version.
 
@@ -30,7 +31,7 @@ A new package installation requires at least one explicit allowed root. There is
 Documents default. Close Krita, make sure the directory exists, and run:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" `
+uvx --from "krita-codex-mcp==0.2.0" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
@@ -48,6 +49,10 @@ Install and update never close Krita. If Krita or another process is using the c
 bridge port, the command stops before changing installed files. Close Krita manually or free the
 port and rerun it.
 
+Because Krita must be closed while files are replaced, installation can only verify the wheel,
+plugin, protocol and configuration offline. Runtime compatibility remains pending until Krita is
+restarted and the live check in step 3 succeeds.
+
 ## 2. Enable and restart the Krita plugin
 
 In Krita, open **Settings > Configure Krita > Python Plugin Manager** and enable
@@ -59,24 +64,36 @@ loads the newly installed plugin and protocol together.
 The offline check needs no running Krita process:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" `
+uvx --from "krita-codex-mcp==0.2.0" `
   krita-codex-install check --offline
 ```
 
 After Krita has restarted, run the full local preflight:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" `
+uvx --from "krita-codex-mcp==0.2.0" `
   krita-codex-install check
 ```
 
-The check compares the running wheel/installer version, the installed plugin and protocol hashes,
-and the distribution and protocol versions reported by the code actually loaded in Krita. It then
-validates authentication, creates a disposable document, checks `krita_state`, validates direct PNG
-preview bytes, exports beneath the first allowed root, closes the document, restores the previously
-active document and removes the temporary PNG.
+The check compares the running wheel/installer version, installed plugin and protocol hashes, and
+the distribution and protocol versions reported by the code actually loaded in Krita. It then
+creates a disposable document and checks the current compatibility profile, a new paint layer,
+native drawing, Undo/Redo, verified layer reparenting, preview bytes and temporary KRA/PNG output.
+The temporary document and files are removed and the previously active document is restored.
 
-Do not start productive work until the command ends with `Ready for productive use.`
+Results are deliberately tiered:
+
+- `compatible`: all checked capabilities are available;
+- `limited`: productive use remains possible, but warnings name each affected MCP tool;
+- `incompatible`: a critical document, projection, persistence or stable-layer capability is
+  missing, so the command stops.
+
+Unknown Krita versions are not rejected by their version string. They are reported as
+`capability_checked` and accepted when the critical profile passes. Codex receives the same static
+capability report in `krita_state` and through `krita_document(action="compatibility")`; it should
+avoid affected tools rather than assuming an unavailable feature. Do not start normal work until
+the command ends with either `Ready for productive use.` or
+`Ready for productive use with the reported limitations.`
 
 ## 4. Configure Codex
 
@@ -86,7 +103,7 @@ version:
 ```toml
 [mcp_servers.krita]
 command = "uvx"
-args = ["--from", "krita-codex-mcp==0.1.1", "krita-codex-mcp"]
+args = ["--from", "krita-codex-mcp==0.2.0", "krita-codex-mcp"]
 startup_timeout_sec = 60
 tool_timeout_sec = 210
 ```
@@ -96,13 +113,13 @@ For all tasks and Git worktrees, place it in the user-level
 Preview its proposed managed block with:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install codex-config
 ```
 
 Apply only after reviewing the complete preview:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config --apply
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install codex-config --apply
 ```
 
 The command asks for confirmation. `--yes` is an explicit non-interactive confirmation. Existing
@@ -138,19 +155,19 @@ and allowed roots are kept. The checkout and its `.venv` are not removed.
 Remove managed plugin files while keeping configuration and token:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install uninstall
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install uninstall
 ```
 
 Configuration removal is deliberately explicit:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install uninstall --remove-config
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config --remove --apply
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install uninstall --remove-config
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install codex-config --remove --apply
 ```
 
 Uninstall never traverses allowed roots and never touches user images, KRA files or exports.
 
-## Production safety and Krita 5.3.2.1 limits
+## Production safety and tested Krita 5.3.2.1 limits
 
 - Configure the narrowest practical allowed roots. The bridge refuses input and output paths
   outside them.
@@ -160,5 +177,8 @@ Uninstall never traverses allowed roots and never touches user images, KRA files
   creates hidden backup layers and blocks a second direct transform until save, close and reopen.
 - Transform masks are limited to three per open document; same-session mutation/removal and mixing
   direct and mask transform backends are blocked because that Krita build is teardown-unstable.
+- Native painting never falls back silently to direct pixel rendering. If a shape or stroke method
+  is absent, the compatibility report marks the affected tools and the specific operation fails
+  with a structured error; unrelated tools remain available.
 - PNG export temporarily uses Krita batch mode to avoid format dialogs. Do not close Krita during a
   long export.

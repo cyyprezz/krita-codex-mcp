@@ -126,8 +126,18 @@ class KritaService(
         resolution: float = 300.0,
         discard_changes: bool = False,
     ) -> dict[str, Any]:
-        if action not in {"list", "create", "open", "activate", "save", "close"}:
-            raise InputError("action must be list, create, open, activate, save, or close")
+        if action not in {
+            "list",
+            "compatibility",
+            "create",
+            "open",
+            "activate",
+            "save",
+            "close",
+        }:
+            raise InputError(
+                "action must be list, compatibility, create, open, activate, save, or close"
+            )
         arguments: dict[str, Any] = {"action": action}
         if action == "create":
             normalized_width = bounded_int(
@@ -166,6 +176,11 @@ class KritaService(
             except PathPolicyError as exc:
                 raise InputError(str(exc)) from exc
             arguments["path"] = str(validated)
+        elif action == "compatibility":
+            if document_id is not None:
+                arguments["document_id"] = required_text(
+                    document_id, "document_id", maximum=80
+                )
         elif action in {"activate", "save", "close"}:
             arguments["document_id"] = required_text(
                 document_id, "document_id", maximum=80

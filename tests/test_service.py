@@ -211,6 +211,23 @@ class KritaServiceTests(unittest.IsolatedAsyncioTestCase):
             ("document", {"action": "save", "document_id": "document-1"}),
         )
 
+    async def test_document_compatibility_is_readable_with_or_without_document(self) -> None:
+        await self.service.document(action="compatibility")
+        self.assertEqual(
+            self.client.calls[-1],
+            ("document", {"action": "compatibility"}),
+        )
+        await self.service.document(
+            action="compatibility", document_id="document-1"
+        )
+        self.assertEqual(
+            self.client.calls[-1],
+            (
+                "document",
+                {"action": "compatibility", "document_id": "document-1"},
+            ),
+        )
+
     async def test_state_and_layer_operations_forward_document_target(self) -> None:
         await self.service.state(document_id="document-1")
         self.assertEqual(
