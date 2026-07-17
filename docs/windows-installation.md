@@ -35,30 +35,18 @@ uvx --from "krita-codex-mcp==0.1.0" `
   --allowed-root "C:\Krita Work"
 ```
 
-The installer stages the bundled plugin, desktop descriptor, shared protocol and generated
-hash manifest beneath `%APPDATA%\krita\pykrita`. It validates the complete stage, swaps each
-component transactionally and restores the previous installation if any step fails. Configuration
-is stored beneath `%LOCALAPPDATA%\krita-codex-mcp` and is not part of the wheel or manifest.
-
-Install, update and uninstall are serialized with a non-blocking process lock. Before the first
-managed-file mutation, the installer atomically writes and fsyncs a persistent journal. It records
-the state before and after every target-to-backup, stage-to-target or remove rename. If the process
-or machine stops mid-transaction, the next mutating installer command restores the previous
-plugin, protocol, desktop descriptor and configuration before beginning new work. A journal is
-removed only after final validation and transaction-directory cleanup. If recovery cannot be
-proven safe, the command stops and prints the retained journal and backup paths.
+The installer places the plugin and shared protocol beneath `%APPDATA%\krita\pykrita` and stores
+configuration beneath `%LOCALAPPDATA%\krita-codex-mcp`. Installation, update and uninstall are
+transactional: a failed or interrupted change is restored automatically when safe. If recovery
+cannot be proven safe, the command stops and reports the retained recovery files.
 
 An existing valid configuration, token, port, allowed roots and unknown configuration fields are
 preserved during migration and update. A changed `--allowed-root` is rejected during migration;
 configure policy changes separately instead of mixing them with a software update.
 
-Install and update never close Krita. If the authenticated bridge is active, replacement is
-rejected before any installed file is changed. On Windows, the installer does not infer port
-availability from `connect()` or `connection refused`. Instead, it binds an unlistening socket with
-`SO_EXCLUSIVEADDRUSE` exactly to `127.0.0.1` on every relevant old and new configured port. Those
-sockets remain open before staging and throughout journal creation, swaps/removes, validation and
-cleanup. This also prevents Krita or another process from claiming the port mid-install. Any bind
-failure blocks the command; close Krita manually or free the configured port and rerun it.
+Install and update never close Krita. If Krita or another process is using the configured local
+bridge port, the command stops before changing installed files. Close Krita manually or free the
+port and rerun it.
 
 ## 2. Enable and restart the Krita plugin
 
@@ -118,11 +106,9 @@ uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --apply
 ```
 
 The command asks for confirmation. `--yes` is an explicit non-interactive confirmation. Existing
-unmarked or ambiguous `[mcp_servers.krita]` entries are never overwritten. Only the block enclosed
-by installer markers can be updated or removed. Before an existing user config is replaced, an
-atomic sibling backup is written and both staged and final TOML are validated. Immediately before
-backup and replacement, the installer verifies that file existence and content still match the
-displayed preview. An external change aborts without replacing the file and requires a new preview.
+unmarked or ambiguous `[mcp_servers.krita]` entries are never overwritten. Only the installer-owned
+block can be updated or removed. If the file changes after the preview, the command stops and
+requires a new preview instead of overwriting it.
 
 No bearer token is written to Codex configuration. Never commit personal configuration or machine
 paths. Restart Codex after changing its MCP configuration, then call `krita_state` and
@@ -164,26 +150,6 @@ uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --remove --
 
 Uninstall never traverses allowed roots and never touches user images, KRA files or exports.
 
-## Local development wheel
-
-A Git checkout is only needed for development. After building the project locally, substitute the
-generated wheel path for the PyPI requirement:
-
-```powershell
-uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
-  krita-codex-install install `
-  --allowed-root "C:\Krita Work"
-```
-
-This installs the bundled payload from the local artifact; it does not publish anything.
-
-## Repository compatibility scripts
-
-Trusted checkouts may continue to use `scripts/install.ps1`, `update.ps1`, `uninstall.ps1` and
-`check-installation.ps1`. These scripts only prepare or locate the checkout `.venv` and delegate to
-the same `krita-codex-install` Python implementation. They contain no separate copy of transaction,
-manifest, configuration, preflight or uninstall logic.
-
 ## Production safety and Krita 5.3.2.1 limits
 
 - Configure the narrowest practical allowed roots. The bridge refuses input and output paths
@@ -196,11 +162,3 @@ manifest, configuration, preflight or uninstall logic.
   direct and mask transform backends are blocked because that Krita build is teardown-unstable.
 - PNG export temporarily uses Krita batch mode to avoid format dialogs. Do not close Krita during a
   long export.
-
-## Release verification
-
-Offline CI runs unit tests, Ruff, direct wheel/sdist builds, wheel-from-sdist verification, artifact
-content checks and local-wheel `uvx` smokes without a Krita GUI. It also compares every Python,
-protocol and bundled plugin payload byte between the direct wheel and the wheel rebuilt from sdist,
-while intentionally ignoring wheel metadata. Before a release, run all live scripts in the
-[Krita 5.3.2.1 E2E checklist](krita-e2e-checklist.md).

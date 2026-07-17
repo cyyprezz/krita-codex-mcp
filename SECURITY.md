@@ -21,14 +21,11 @@ This project is designed for one Windows user controlling one local Krita proces
 - Install and update refuse to replace files while the authenticated bridge is active. The
   installer never closes Krita. Runtime responses identify the distribution and wire-protocol
   versions actually loaded by Krita, and the MCP client fails closed on a mismatch.
-- On Windows, the installer must bind `127.0.0.1` with `SO_EXCLUSIVEADDRUSE` on every relevant old
-  and new configured bridge port before staging or recovery mutation. It holds all reservations
-  through journaled swaps/removes, validation and cleanup. A bind failure blocks fail-closed and is
-  never overridden by connection-probe results.
-- Install, update and uninstall are serialized by an operating-system file lock that is released
-  with its process handle. Each component mutation is bracketed by an atomically replaced,
-  fsync-backed journal; an interrupted transaction is recovered before the next mutation. If safe
-  recovery is impossible, the journal and backups remain in place and their paths are reported.
+- On Windows, install, update and uninstall require exclusive access to every configured local
+  bridge port. A busy or uncertain port blocks the command before managed files are changed.
+- Install, update and uninstall are serialized and transactional. An interrupted change is
+  recovered before the next mutation; if safe recovery is impossible, recovery files are retained
+  and their locations are reported.
 - A previewed Codex configuration change is applied only if both file existence and content still
   match the preview snapshot immediately before backup and replacement.
 - The protocol has a fixed operation allow-list. There is no arbitrary Python, shell or Krita
@@ -44,11 +41,9 @@ This project is designed for one Windows user controlling one local Krita proces
   schema; cross-kind/unknown packages and symbolic managed paths fail closed, while Unity `.meta`
   sidecars are preserved.
 - Closing a modified document fails unless `discard_changes=true` is explicit.
-- Native painting and shapes use Krita's painting API; there is no `setPixelData` painting
-  fallback. Color replacement uses bounded RGBA/U8 reads and `Selection.setPixelData` only for a
-  temporary one-byte mask; the image mutation itself is a native fill action. Bounded
-  editable raster import is the only operation that copies decoded image bytes into a paint layer,
-  and it is restricted to allowed input paths, byte/pixel limits and RGBA/U8 destinations.
+- Native painting and shapes use Krita's painting API; there is no direct pixel-painting fallback.
+  Color replacement uses a bounded temporary selection mask and a native fill action. Editable
+  raster import is restricted to allowed input paths, byte/pixel limits and RGBA/U8 destinations.
 
 Copy/cut/paste intentionally use Krita's process-global clipboard, so they may replace clipboard
 content visible to the same Windows user. Free Node transforms are not undoable through Krita's
@@ -62,5 +57,6 @@ as the same Windows user. Keep `%LOCALAPPDATA%\krita-codex-mcp\config.json` priv
 allowed roots rather than an entire drive. Do not expose the port through firewall rules, proxies,
 containers or port forwarding.
 
-Layer changes and native painting rely on Krita's own undo behavior. The live checklist must pass
-before using the bridge on irreplaceable work. Keep normal KRA backups.
+Layer changes and native painting rely on Krita's own undo behavior. Run the full installer
+preflight before productive use, do not experiment on irreplaceable work, and keep normal KRA
+backups.

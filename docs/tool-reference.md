@@ -1,49 +1,12 @@
-# Bridge protocol v1
+# Tool behavior and limits
 
-The transport between the external MCP process and Krita is intentionally private and small. It
-is JSON over HTTP/1.1 on `127.0.0.1`; every request uses `Authorization: Bearer <token>`.
-
-Endpoint: `POST /v1/execute`
-
-```json
-{
-  "protocol_version": "1",
-  "request_id": "a UUID",
-  "operation": "state",
-  "arguments": {}
-}
-```
-
-Successful response:
-
-```json
-{
-  "protocol_version": "1",
-  "request_id": "the same UUID",
-  "ok": true,
-  "result": {"bridge_revision": 0}
-}
-```
-
-Structured failure:
-
-```json
-{
-  "protocol_version": "1",
-  "request_id": "the same UUID",
-  "ok": false,
-  "error": {
-    "code": "NO_ACTIVE_DOCUMENT",
-    "message": "Krita has no active document",
-    "details": {},
-    "retryable": false
-  }
-}
-```
+This guide documents the observable behavior shared by the public MCP tools. The private bridge
+between the MCP process and Krita stays on authenticated localhost and is not a public network API.
+Failures return a stable error code, a readable message, optional details and a `retryable` flag.
 
 Only `state`, `preview`, `canvas`, `edit`, `document`, `layers`, `history`, `brush`, `paint_path`,
-`draw`, `color`, `asset`, and `save_export` are valid operations. Request IDs are checked in both
-directions. The bridge accepts one operation at a time and enforces request, response, preview,
+`draw`, `color`, `asset`, and `save_export` are valid operations. The bridge accepts one operation
+at a time and enforces request, response, preview,
 import/asset-size, document-size, point-count and timeout limits.
 
 `bridge_revision` counts successful mutations performed through this bridge instance. It is not
@@ -62,7 +25,7 @@ completion. An operation that had not begun before timeout reports `operation_ma
 
 `paint_path` accepts 2–512 points with canvas-space `x`, `y`, and pressure in the range 0–1. It
 uses one native `paintLine` call per adjacent pair. The response reports `undo_steps` explicitly;
-the current contract expects one Krita undo step per segment and the live checklist verifies that.
+the current contract expects one Krita undo step per segment.
 
 The public request accepts numeric coordinates. At the Krita 5.3.2.1 binding boundary they are
 rounded to integer `QPoint` values because that version rejects `QPointF` for `Node.paintLine`.
@@ -84,10 +47,8 @@ document they used.
 document-projection region. Transparent outer margins remain part of the whole-canvas result.
 An explicit `x`, `y`, `width`, `height` region may be enlarged by an integer scale of 1–16 using
 nearest-neighbor sampling, while `max_width` and `max_height` remain hard output bounds.
-Before reading projection pixels, the plugin waits for queued work, requests a projection refresh,
-and waits again so visibility/reorder mutations cannot race the preview render.
-The MCP process base64-decodes preview and asset-preview responses, enforces configured byte
-limits and rejects any payload that does not begin with the eight-byte PNG signature.
+Preview waits for pending Krita work and refreshes the projection so visibility and reorder changes
+are reflected before rendering. Preview and asset responses are size-limited, validated PNGs.
 
 `canvas` supports `read`, `sample_color`, `resize`, `scale`, `crop`, `rotate`, `flip`, and
 `import_layer`. Color sampling reads one composited projection pixel and returns RGBA plus
@@ -120,9 +81,8 @@ return only the affected layer summary; `response_mode="full"` opts back into th
 In addition to create/activate/rename/properties, the operation supports native duplication,
 deletion, translation and reparenting/reordering. `reorder` moves to the root when `parent_id` is
 omitted; `above_id` optionally names a direct child of the destination and an omitted `above_id`
-inserts at the bottom. Cycles and non-group destinations fail closed. Reparenting creates a
-detached recovery copy before mutation, verifies the destination parent by UUID after Krita
-finishes, and restores either the original or its recovery copy if Libkis reports false success.
+inserts at the bottom. Cycles and non-group destinations fail closed. Reparenting is verified after
+Krita finishes and rolls back if the destination cannot be confirmed.
 Layer properties include visibility, opacity, lock, paint-layer alpha lock, alpha inheritance and
 a conservative allow-list of stable Krita blending-mode IDs. Multi-property changes are verified
 through getters and rolled back if Krita rejects any field. `merge_down` is intentionally limited
@@ -132,18 +92,15 @@ layers.
 
 Layer transforms include scale, arbitrary rotation, shear, crop and horizontal/vertical mirror.
 Scale, rotate and shear default to `transform_mode="mask"`. The plugin creates a native Krita
-`TransformMask`, starts from that running build's own `toXML()` template, changes only allow-listed
-affine fields, applies them with `fromXML()`, and validates the returned `finalAffineTransform()`.
-No transform XML crosses the MCP boundary. Each call creates a separate mask and returns its UUID,
-effective matrix and zero native Undo steps; removing the mask after a KRA round trip restores the
-unchanged source pixels.
+`TransformMask`; no transform XML crosses the MCP boundary. Each call creates a separate mask and
+returns its UUID, effective matrix and zero native Undo steps. Removing the mask after a KRA round
+trip restores the unchanged source pixels.
 
 Krita 5.3.2.1 becomes teardown-unstable when transform masks are repeatedly rewritten, replaced,
 hidden/shown or removed in the same open session. The bridge therefore permits at most three
 transform masks in a document, rejects a fourth with `UNSAFE_TRANSFORM_MASK_SEQUENCE`, and blocks
 mutation or removal of a newly created mask with `UNSAFE_TRANSFORM_MASK_MUTATION`. Save, close and
-reopen the KRA before removing a mask. This cautious contract was live-verified with scale, rotate
-and shear, three distinct preview hashes, stable mask UUIDs after reopen, and source restoration.
+reopen the KRA before removing a mask.
 
 `transform_mode="direct"` remains an explicit compatibility fallback; crop is necessarily direct.
 Scale strategies are checked against the running Krita build. Krita 5.3.2.1 does not put direct
@@ -151,11 +108,9 @@ Scale strategies are checked against the running Krita build. Krita 5.3.2.1 does
 hidden full-layer backup and returns `backup_layer_id`. A second direct transform in one open
 document fails with `UNSAFE_TRANSFORM_SEQUENCE`. For a saved KRA beneath an allowed root,
 `checkpoint_reopen=true` requires an explicit `document_id` and makes the MCP process checkpoint,
-close and reopen the KRA through separate bridge requests, with a bounded Qt settling interval
-between them. It verifies the stable layer UUID before transforming and returns both old and
-replacement document/layer IDs. Keeping
-the close/open phases out of one Qt-main-thread callback avoids Krita's delayed layer-docker update
-crash. Direct and mask layer-transform backends still may not be mixed in one Krita process, and
+close and reopen the KRA before transforming. It verifies the stable layer UUID and returns both
+old and replacement document/layer IDs. Direct and mask layer-transform backends still may not be
+mixed in one Krita process, and
 direct mode is rejected while the target document contains transform masks.
 `UNSAFE_TRANSFORM_BACKEND_MIX` requires using mask mode, safely removing masks, or saving all
 documents and restarting Krita. Mirror uses `mirrorNodeX/Y`, reports one native Undo step, and is
@@ -166,25 +121,20 @@ exempt from both backend guards.
 styles, optional preset and brush size, open or closed paths, and pressure for line endpoints.
 Every successful call is one scripted-brush Undo step and includes
 `verified_content_change=true`. On an initially empty layer, bounds/extents must become non-empty;
-on an existing layer, bounded target pixels are hashed before and after. A native call that changes
-neither pixels nor bounds fails with `DRAW_NO_CHANGE` and does not risk undoing an unrelated prior
-action. The existing `paint_path` remains the pressure-aware multi-segment API and reports one step
-per segment.
+on an existing layer, content must visibly change. A native call that changes neither pixels nor
+bounds fails with `DRAW_NO_CHANGE` and does not risk undoing an unrelated prior action. The existing
+`paint_path` remains the pressure-aware multi-segment API and reports one step per segment.
 
 `color` can list/read installed Krita palettes and apply a swatch to foreground or background.
 It also stores up to 256 named `#RRGGBB[AA]` entries as a private document annotation, so the
 project palette persists inside the KRA without mutating global Krita resources. Exact/tolerant
-RGBA/U8 replacement reads bounded layer pixels only to build a one-byte selection mask, then uses
-Krita's native foreground-fill action; matching pixels remain selected so one Undo targets the
-image mutation. `adjust` exposes a fixed filter allow-list, accepts only keys exposed by the
-running filter configuration, and uses undoable `Filter.startFilter`, never direct `Filter.apply`.
+RGBA/U8 replacement leaves matching pixels selected and uses one undoable native fill action.
+`adjust` exposes a fixed filter allow-list and accepts only keys supported by the running Krita
+filter configuration.
 
-`asset` supports `export_layer` for paint layers and groups. It clones the document, isolates the
-target by its validated layer-index path, renders Krita's document projection and atomically
-replaces the requested PNG only after encoding and size checks. The original document's visibility
-and modified state are untouched. Canvas-sized and content-cropped output are supported, and the
-MCP result includes a direct PNG preview. Krita 5.3.2.1's native `Node.save` path was explicitly
-rejected after the live group export blocked the Qt main thread.
+`asset` supports `export_layer` for paint layers and groups. The original document's visibility and
+modified state are untouched. Canvas-sized and content-cropped output are supported, replacement
+is atomic, and the MCP result includes a direct PNG preview.
 
 `asset` also supports `export_animation` for a group whose direct paint/group children are frames. The caller
 can provide explicit frame UUID order or use Krita's bottom-to-top child order. It exports stable
@@ -213,9 +163,3 @@ not RGB bytes, and preserves each retained region's source index.
 Region output uses the same staged, schema-gated transaction as animation output. Animation and
 region packages cannot overwrite one another, symbolic managed paths fail closed, only known
 generated files are replaced and Unity `.meta` files remain untouched.
-
-The canonical dependency-free protocol package is `src/krita_codex_protocol`. The wheel-native
-Windows installer copies that exact package from the running distribution next to the bundled
-Krita plugin. A generated relative-path hash manifest and runtime version fields let preflight
-verify that the MCP process, installed payload and code actually loaded in Krita use the same
-distribution and wire-protocol versions without hand-maintained wire-model duplicates.
