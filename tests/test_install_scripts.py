@@ -49,6 +49,9 @@ class InstallScriptContractTests(unittest.TestCase):
         self.assertIn("close Krita or free the", port_reservation)
         self.assertIn('"preview",', preflight)
         self.assertIn('"save_export",', preflight)
+        self.assertIn('"compatibility"', preflight)
+        self.assertIn('"NATIVE_DRAW_PROBE_FAILED"', preflight)
+        self.assertIn('"LAYER_WORKFLOW_PROBE_FAILED"', preflight)
         self.assertIn("_validate_runtime_versions", preflight)
 
     def test_ci_uses_locked_dependency_resolution(self) -> None:

@@ -102,6 +102,15 @@ class PluginContractTests(unittest.TestCase):
         self.assertIn('result["bridge_protocol_version"]', service)
         self.assertIn('Path(__file__).with_name("_install_info.json")', installation_info)
 
+    def test_runtime_compatibility_is_capability_based_and_native_only(self) -> None:
+        compatibility = (PLUGIN_ROOT / "compatibility.py").read_text(encoding="utf-8")
+        document = (PLUGIN_ROOT / "document_service.py").read_text(encoding="utf-8")
+        self.assertIn('TESTED_KRITA_VERSIONS = ("5.3.2.1",)', compatibility)
+        self.assertIn('"capability_checked"', compatibility)
+        self.assertIn('"native_only_no_silent_pixel_fallback"', compatibility)
+        self.assertIn('"runtime_compatibility": build_runtime_compatibility', document)
+        self.assertNotIn("setPixelData(", compatibility)
+
     def test_expanded_surface_uses_native_krita_apis(self) -> None:
         source = plugin_source(
             "document_service.py",

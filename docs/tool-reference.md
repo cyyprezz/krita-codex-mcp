@@ -12,6 +12,14 @@ import/asset-size, document-size, point-count and timeout limits.
 `bridge_revision` counts successful mutations performed through this bridge instance. It is not
 a document revision and does not detect edits made manually in Krita or by another plugin.
 
+`krita_state` includes `runtime_compatibility`, and `krita_document` supports the read-only
+`compatibility` action even when no document ID is supplied. The report contains the running Krita
+version, compatibility-profile version, `compatible`/`limited`/`incompatible`/`unknown` status,
+per-feature availability and structured issues with affected MCP tools. An unknown application
+version is capability-checked instead of rejected by name. A missing optional API limits only its
+reported tools; missing document lifecycle, projection, persistence or stable layer-tree APIs are
+critical. Native drawing never silently falls back to a direct pixel renderer.
+
 Timeout selection is shared by the MCP client and installed bridge protocol package. Normal reads
 and edits use `request_timeout_seconds` (30 seconds by default), `document.open` and
 `document.save` use `open_save_timeout_seconds` (120 seconds), and `asset` plus `save_export` use
@@ -27,13 +35,15 @@ completion. An operation that had not begun before timeout reports `operation_ma
 uses one native `paintLine` call per adjacent pair. The response reports `undo_steps` explicitly;
 the current contract expects one Krita undo step per segment.
 
-The public request accepts numeric coordinates. At the Krita 5.3.2.1 binding boundary they are
-rounded to integer `QPoint` values because that version rejects `QPointF` for `Node.paintLine`.
+The public request accepts numeric coordinates. On the tested Krita 5.3.2.1 binding they are
+rounded to integer `QPoint` values because that build rejects `QPointF` for `Node.paintLine`.
 
-`document` supports `list`, `create`, `open`, `activate`, `save`, and `close`. Open paths are
-canonicalized and checked on both sides of the bridge. `save` is an in-place KRA checkpoint for a
-document that already has an allowed `.kra` path; a new document must first use `save_export` with
-a KRA path. Modified documents refuse to close unless `discard_changes=true` is explicit.
+`document` supports `list`, `compatibility`, `create`, `open`, `activate`, `save`, and `close`.
+`compatibility` is read-only and may target the active document or an explicit document ID. Open
+paths are canonicalized and checked on both sides of the bridge. `save` is an in-place KRA
+checkpoint for a document that already has an allowed `.kra` path; a new document must first use
+`save_export` with a KRA path. Modified documents refuse to close unless `discard_changes=true` is
+explicit.
 Document IDs are stable for the lifetime of the plugin and document, but are not persisted across
 Krita restarts.
 

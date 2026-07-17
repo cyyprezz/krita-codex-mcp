@@ -15,7 +15,7 @@ from .validation import InputError
 def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
     @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
     async def krita_state(document_id: str | None = None) -> dict[str, Any]:
-        """Read active document, canvas, recursive layer tree, active layer and painting state."""
+        """Read document/layers/painting state plus the running Krita compatibility report."""
         return await tool_call(lambda: service.state(document_id=document_id))
 
     @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
@@ -107,7 +107,9 @@ def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
         annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
     )
     async def krita_document(
-        action: Literal["list", "create", "open", "activate", "save", "close"] = "list",
+        action: Literal[
+            "list", "compatibility", "create", "open", "activate", "save", "close"
+        ] = "list",
         path: str | None = None,
         document_id: str | None = None,
         width: Annotated[int, Field(ge=1, le=32768)] = 1920,
@@ -119,7 +121,7 @@ def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
         resolution: Annotated[float, Field(ge=1, le=2400)] = 300.0,
         discard_changes: bool = False,
     ) -> dict[str, Any]:
-        """List, create, open, activate, checkpoint-save, or explicitly close documents."""
+        """Inspect compatibility; list, create, open, activate, save, or close documents."""
         return await tool_call(
             lambda: service.document(
                 action=action,

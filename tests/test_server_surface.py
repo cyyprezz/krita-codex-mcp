@@ -170,6 +170,7 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
         tools = {tool.name: tool for tool in await self.server.list_tools()}
         document_actions = tools["krita_document"].inputSchema["properties"]["action"]["enum"]
         self.assertIn("save", document_actions)
+        self.assertIn("compatibility", document_actions)
         for name in (
             "krita_state",
             "krita_preview",

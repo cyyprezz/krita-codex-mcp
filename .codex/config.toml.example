@@ -1,5 +1,5 @@
 [mcp_servers.krita]
 command = "uvx"
-args = ["--from", "krita-codex-mcp==0.1.1", "krita-codex-mcp"]
+args = ["--from", "krita-codex-mcp==0.2.0", "krita-codex-mcp"]
 startup_timeout_sec = 60
 tool_timeout_sec = 210
