@@ -5,6 +5,10 @@
 Control Krita from OpenAI Codex through a secure local
 Model Context Protocol (MCP) server for Windows.
 
+[PyPI package](https://pypi.org/project/krita-codex-mcp/) ·
+[GitHub releases](https://github.com/cyyprezz/krita-codex-mcp/releases) ·
+[Windows installation guide](docs/windows-installation.md)
+
 A Windows-first local MCP server that lets Codex inspect and control Krita through a small,
 authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listens only on
 `127.0.0.1`, validates a shared bearer token, and dispatches every Krita API call to Qt's main
@@ -38,35 +42,35 @@ The bridge has no arbitrary Python execution tool and no direct pixel painting f
 painting, shapes, replacement fills and correction filters go through native Krita actions or
 stroke APIs. If the installed Krita build lacks a required method, the operation fails closed.
 
-## Production workflow
+## Quick start
 
-Use this order for a real Krita session:
-
-1. Run the wheel-bundled `krita-codex-install install` command with at least one explicit,
-   narrow `--allowed-root`.
-2. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
-3. Restart Krita so the installed plugin and shared protocol package are loaded together.
-4. Run `krita-codex-install check` and require `Ready for productive use.`
-5. Preview the checkout-free, exactly version-pinned `uvx` Codex block with
-   `krita-codex-install codex-config`.
-6. Apply it only after explicit confirmation, restart Codex, verify `krita_state` and
-   `krita_preview`, and only then start normal work.
-
-For a local wheel build, the initial installation looks like:
+This requires Krita 5.3.2.1 and [`uv`/`uvx`](https://docs.astral.sh/uv/getting-started/installation/)
+on `PATH`. Close Krita, make sure the allowed directory already exists, and install the current
+release from PyPI:
 
 ```powershell
-uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
+uvx --from "krita-codex-mcp==0.1.0" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
 
-Once the same version is published, replace the wheel path with
-`krita-codex-mcp==0.1.0`. Install and update never close Krita. If the authenticated bridge is
-running, replacement is rejected before any installed files are changed and Krita must be closed
-manually. On Windows, safety is decided by an exclusive bind to every relevant old and new bridge
-port, not by a connection attempt. The installer holds those port reservations from before staging
-through journaled swaps, validation and cleanup. A failed reservation blocks replacement
-fail-closed and asks the user to close Krita or free the port.
+Then use this order for a real Krita session:
+
+1. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
+2. Restart Krita so the installed plugin and shared protocol package are loaded together.
+3. Run the same version's `krita-codex-install check` and require
+   `Ready for productive use.`
+4. Preview the checkout-free, exactly version-pinned `uvx` Codex block with
+   `krita-codex-install codex-config`.
+5. Apply it only after explicit confirmation, restart Codex, verify `krita_state` and
+   `krita_preview`, and only then start normal work.
+
+Install and update never close Krita. If the authenticated bridge is running, replacement is
+rejected before any installed files are changed and Krita must be closed manually. On Windows,
+safety is decided by an exclusive bind to every relevant old and new bridge port, not by a
+connection attempt. The installer holds those port reservations from before staging through
+journaled swaps, validation and cleanup. A failed reservation blocks replacement fail-closed and
+asks the user to close Krita or free the port.
 
 For a personal installation, use the user-level `C:\Users\<you>\.codex\config.toml`. This is the
 recommended option because the server is then available to all local Codex tasks and Git
@@ -185,8 +189,8 @@ See [Windows installation](docs/windows-installation.md), [protocol](docs/protoc
 Releases are built from stable `vX.Y.Z` tags that already belong to `main`. The release workflow
 repeats the complete Windows verification, publishes the exact verified wheel and sdist through
 PyPI Trusted Publishing, and creates the GitHub release only after the PyPI upload succeeds. It
-does not use a stored PyPI API token. See the [release guide](docs/releasing.md) for the one-time
-publisher setup and the release checklist.
+does not use a stored PyPI API token. See the [release guide](docs/releasing.md) for the maintainer
+checklist.
 
 ## License
 
@@ -215,6 +219,14 @@ $env:PYTHONPATH = "src"
 .\.venv\Scripts\ruff.exe check .
 .\.venv\Scripts\python.exe scripts\verify_release.py
 .\.venv\Scripts\python.exe -m build
+```
+
+To test the wheel produced by that build without using PyPI:
+
+```powershell
+uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
+  krita-codex-install install `
+  --allowed-root "C:\Krita Work"
 ```
 
 Inspect both wheel and sdist contents, build a wheel again from the sdist, and run the local-wheel

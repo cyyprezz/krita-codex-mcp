@@ -11,22 +11,23 @@ Prerequisites:
 - a local Codex desktop app, CLI or IDE extension;
 - one or more narrow local directories for KRA and export access.
 
-The examples below use version `0.1.0`. Replace it with the exact wheel version being installed.
-Until the package is published, use a locally built wheel path in `--from`; do not substitute an
-unpublished PyPI name.
-
-## 1. Install from a wheel
-
-A new package installation requires at least one explicit allowed root. There is no implicit
-Documents default:
+If `uvx` is not available, install `uv` with Windows Package Manager and open a new terminal:
 
 ```powershell
-uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
-  krita-codex-install install `
-  --allowed-root "C:\Krita Work"
+winget install --id=astral-sh.uv -e
 ```
 
-Once the same wheel is available from PyPI, the checkout-free form is:
+The [official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+lists alternative installation methods.
+
+The examples below use the current stable release, `0.1.0`, from
+[PyPI](https://pypi.org/project/krita-codex-mcp/). Always keep the installer, Krita plugin and
+Codex server pinned to the same exact version.
+
+## 1. Install from PyPI
+
+A new package installation requires at least one explicit allowed root. There is no implicit
+Documents default. Close Krita, make sure the directory exists, and run:
 
 ```powershell
 uvx --from "krita-codex-mcp==0.1.0" `
@@ -132,13 +133,21 @@ paths. Restart Codex after changing its MCP configuration, then call `krita_stat
 Close Krita manually, then update with the new exact version:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.1" krita-codex-install update
+$Version = "<new-version>"
+uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install update
 ```
 
 After updating the payload, preview and explicitly update the managed Codex block to the same
-version, restart Krita and run the full preflight. A checkout-based legacy installation is migrated
-by `install`; its existing configuration and allowed roots are kept. The checkout and its `.venv`
-are not removed.
+version:
+
+```powershell
+uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install codex-config
+uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install codex-config --apply
+```
+
+Restart Krita and Codex, then run the full preflight. Replace `<new-version>` with the version shown
+on PyPI. A checkout-based legacy installation is migrated by `install`; its existing configuration
+and allowed roots are kept. The checkout and its `.venv` are not removed.
 
 Remove managed plugin files while keeping configuration and token:
 
@@ -154,6 +163,19 @@ uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --remove --
 ```
 
 Uninstall never traverses allowed roots and never touches user images, KRA files or exports.
+
+## Local development wheel
+
+A Git checkout is only needed for development. After building the project locally, substitute the
+generated wheel path for the PyPI requirement:
+
+```powershell
+uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
+  krita-codex-install install `
+  --allowed-root "C:\Krita Work"
+```
+
+This installs the bundled payload from the local artifact; it does not publish anything.
 
 ## Repository compatibility scripts
 

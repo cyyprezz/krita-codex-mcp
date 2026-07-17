@@ -62,7 +62,7 @@ completion. An operation that had not begun before timeout reports `operation_ma
 
 `paint_path` accepts 2–512 points with canvas-space `x`, `y`, and pressure in the range 0–1. It
 uses one native `paintLine` call per adjacent pair. The response reports `undo_steps` explicitly;
-the first spike expects one Krita undo step per segment and the live checklist verifies that.
+the current contract expects one Krita undo step per segment and the live checklist verifies that.
 
 The public request accepts numeric coordinates. At the Krita 5.3.2.1 binding boundary they are
 rounded to integer `QPoint` values because that version rejects `QPointF` for `Node.paintLine`.
