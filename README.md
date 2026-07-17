@@ -49,7 +49,7 @@ on `PATH`. Close Krita, make sure the allowed directory already exists, and inst
 release from PyPI:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" `
+uvx --from "krita-codex-mcp==0.1.1" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```

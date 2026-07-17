@@ -20,7 +20,7 @@ winget install --id=astral-sh.uv -e
 The [official uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
 lists alternative installation methods.
 
-The examples below use the current stable release, `0.1.0`, from
+The examples below use the current stable release, `0.1.1`, from
 [PyPI](https://pypi.org/project/krita-codex-mcp/). Always keep the installer, Krita plugin and
 Codex server pinned to the same exact version.
 
@@ -30,7 +30,7 @@ A new package installation requires at least one explicit allowed root. There is
 Documents default. Close Krita, make sure the directory exists, and run:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" `
+uvx --from "krita-codex-mcp==0.1.1" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
@@ -59,14 +59,14 @@ loads the newly installed plugin and protocol together.
 The offline check needs no running Krita process:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" `
+uvx --from "krita-codex-mcp==0.1.1" `
   krita-codex-install check --offline
 ```
 
 After Krita has restarted, run the full local preflight:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" `
+uvx --from "krita-codex-mcp==0.1.1" `
   krita-codex-install check
 ```
 
@@ -86,7 +86,7 @@ version:
 ```toml
 [mcp_servers.krita]
 command = "uvx"
-args = ["--from", "krita-codex-mcp==0.1.0", "krita-codex-mcp"]
+args = ["--from", "krita-codex-mcp==0.1.1", "krita-codex-mcp"]
 startup_timeout_sec = 60
 tool_timeout_sec = 210
 ```
@@ -96,13 +96,13 @@ For all tasks and Git worktrees, place it in the user-level
 Preview its proposed managed block with:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config
 ```
 
 Apply only after reviewing the complete preview:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --apply
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config --apply
 ```
 
 The command asks for confirmation. `--yes` is an explicit non-interactive confirmation. Existing
@@ -138,14 +138,14 @@ and allowed roots are kept. The checkout and its `.venv` are not removed.
 Remove managed plugin files while keeping configuration and token:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" krita-codex-install uninstall
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install uninstall
 ```
 
 Configuration removal is deliberately explicit:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.1.0" krita-codex-install uninstall --remove-config
-uvx --from "krita-codex-mcp==0.1.0" krita-codex-install codex-config --remove --apply
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install uninstall --remove-config
+uvx --from "krita-codex-mcp==0.1.1" krita-codex-install codex-config --remove --apply
 ```
 
 Uninstall never traverses allowed roots and never touches user images, KRA files or exports.
