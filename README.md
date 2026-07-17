@@ -66,11 +66,8 @@ Then use this order for a real Krita session:
    `krita_preview`, and only then start normal work.
 
 Install and update never close Krita. If the authenticated bridge is running, replacement is
-rejected before any installed files are changed and Krita must be closed manually. On Windows,
-safety is decided by an exclusive bind to every relevant old and new bridge port, not by a
-connection attempt. The installer holds those port reservations from before staging through
-journaled swaps, validation and cleanup. A failed reservation blocks replacement fail-closed and
-asks the user to close Krita or free the port.
+rejected before any installed files are changed and Krita must be closed manually. A busy local
+bridge port also stops the installer before replacement begins.
 
 For a personal installation, use the user-level `C:\Users\<you>\.codex\config.toml`. This is the
 recommended option because the server is then available to all local Codex tasks and Git
@@ -87,75 +84,23 @@ disposable document, validates direct PNG preview bytes, exports a temporary PNG
 root, closes the document and removes the file. It restores the previously active document and does
 not edit Codex configuration or contact an external service.
 
-## Current status
+## Capabilities and Krita limits
 
-- The wheel now contains the complete Krita plugin, desktop descriptor and shared protocol, plus a
-  Python-native transactional installer usable from a local wheel or an exactly pinned `uvx`
-  invocation without a Git checkout.
-- Installation manifests contain only relative managed paths, distribution/protocol versions and
-  SHA-256 hashes. Configuration and bearer tokens remain outside the wheel and manifest.
-- Package install, update, check and uninstall share one Python implementation. The PowerShell
-  scripts are compatibility wrappers for trusted repository checkouts.
-- Mutating commands hold a non-blocking process lock. A fsync-backed, atomically replaced journal
-  records every target-to-backup and stage-to-target boundary. The next mutating command restores
-  the previous installation after an interrupted install or uninstall before starting new work.
-- Protocol, configuration, dual input/output path policy, bridge client and thirteen-tool MCP surface
-  implemented.
-- Krita plugin implements state, preview, persistent layer-tree editing, native path painting, KRA
-  save and PNG export.
-- Offline unit, functional HTTP and contract tests cover protocol, path escapes, authentication,
-  request limits, timeout/busy serialization, input validation and the absence of
-  pixel/arbitrary-code painting.
-- Reliability contracts reject native draw calls that changed no pixels, verify layer reparenting
-  with a recovery copy, synchronize projections before previews, and keep mutation responses
-  compact unless the caller explicitly requests the full layer tree.
-- A live Windows run on Krita 5.3.2.1 verified state, direct PNG previews, stable layer UUIDs,
-  pressure-aware native painting, two undo steps for two segments, dialog-free KRA/PNG output,
-  authentication failure and allowed-root enforcement.
-- A real thirteen-tool MCP STDIO session created its own disposable document, used `krita_draw`
-  and a KRA-backed project palette, verified direct
-  metadata plus PNG `ImageContent`, and closed the document again.
-- The expansion live run verified stable in-session document IDs, preset search and brush state,
-  native painting, bounded undo/redo, layer duplication/grouping/reordering/translation/deletion,
-  explicit targeting with two open documents, unsaved-close refusal, KRA/PNG output, an in-place
-  KRA checkpoint, isolated transparent group export, and close/reopen with the saved layer
-  structure intact.
-- Frame-group animation export produces equal-size transparent frame PNGs, a deterministic
-  spritesheet and a Unity-oriented JSON manifest in one managed package directory. Explicit frame
-  order, canvas/common-union crops, timing, loop, padding, pivot and pixels-per-unit metadata are
-  supported. Re-export preserves Unity `.meta` sidecars for stable generated filenames.
-- Tileset-grid and explicit-region export produce an isolated full-canvas spritesheet, stable
-  numeric region PNGs and a Unity-oriented manifest with Point-filter settings, hashes, pivots and
-  both PNG-top-left and Unity-bottom-left rectangles. Re-export is transactional and keeps `.meta`
-  sidecars untouched.
-- The editing live run verified cropped nearest-neighbor previews, composited RGBA sampling,
-  rectangular and opaque-pixel selections, native fill/clear with undo, anchored canvas resize,
-  nearest-neighbor scaling, crop/rotate/flip, and an embedded editable raster import. The import
-  survived source deletion plus a KRA save/close/reopen round trip with the same layer UUID.
-- The creation live run verified native line/path/polygon/rectangle/ellipse painting, meaningful
-  shape Undo/Redo, Krita-global clipboard actions, selection-to-layer workflows, exact RGBA color
-  replacement through a temporary selection plus native fill, undoable filter strokes, and a
-  document project palette that survived save/close/reopen. Free layer scale/rotate/shear/crop are
-  not undoable in Krita 5.3.2.1's Python API, so each creates a hidden backup layer and returns its
-  UUID. Because two direct node transforms in one open document crash that Krita build during
-  teardown, a second is rejected until the KRA is saved, closed and reopened. Direct callers may
-  set `checkpoint_reopen=true` to perform that bounded KRA round trip inside `krita_layers` and
-  receive the replacement document/layer IDs. Native layer mirror remains one normal Undo step
-  and does not count toward that guard.
-- The transform-mask live run verified non-destructive scale, rotate and shear on one asymmetric
-  transparent layer. Each operation created a native `transformmask`, changed the direct PNG
-  preview, survived a KRA save/close/reopen round trip with stable UUIDs, and could then be removed
-  to restore the original projection. Krita 5.3.2.1 is unstable when a mask is repeatedly mutated
-  or removed before the first reopen, so the bridge allows at most three masks, blocks same-session
-  mask mutation/removal, and refuses to mix mask and direct layer-transform backends until Krita is
-  restarted.
-- A direct Codex-to-Krita asset workflow created and reopened a layered transparent 128x128 pickup,
-  preserved its project palette and stable layer UUIDs, and verified that whole-canvas previews
-  retain transparent margins. Closing the final document now reports no stale active UUID.
+The current release supports native preset-backed painting and shapes, persistent document and
+layer editing, selections, color operations, KRA/PNG output, and Unity-oriented animation,
+tileset and named-region packages. Preview and asset operations return PNG images directly to the
+MCP caller. Re-export preserves Unity `.meta` sidecars for stable generated filenames.
 
-Krita 5.3.2.1's Python binding requires integer `QPoint` values for `Node.paintLine`; incoming
-canvas coordinates are therefore rounded at the native API boundary. PNG export temporarily
-enables document batch mode so no format dialog can block the local bridge.
+Krita 5.3.2.1 imposes several safety limits:
+
+- Free layer scale, rotate, shear and crop operations are not native Undo commands. The bridge
+  creates a hidden backup layer and blocks a second direct transform until the KRA is saved,
+  closed and reopened. `checkpoint_reopen=true` can perform that round trip automatically.
+- Transform masks are limited to three per open document. Same-session mask mutation/removal and
+  mixing mask and direct transform backends are blocked until Krita restarts.
+- `Node.paintLine` requires integer `QPoint` values, so incoming canvas coordinates are rounded at
+  the native API boundary.
+- PNG export temporarily enables Krita batch mode so no format dialog can block the local bridge.
 
 ## Timeouts and production guardrails
 
@@ -176,51 +121,10 @@ Keep `allowed_roots` as narrow as practical, keep ordinary versioned or manual K
 do not treat the bridge timeout as cancellation. The bridge is local-only and binds exactly to
 `127.0.0.1`.
 
-Before a release, run every live helper listed in the
-[Krita E2E checklist](docs/krita-e2e-checklist.md) against the supported Krita build. The offline
-CI does not start a Krita GUI.
-
-See [Windows installation](docs/windows-installation.md), [protocol](docs/protocol.md),
-[security](SECURITY.md), [service mixin contracts](docs/service-mixin-contracts.md), and the
-[Krita E2E checklist](docs/krita-e2e-checklist.md).
+See [Windows installation](docs/windows-installation.md),
+[tool behavior and limits](docs/tool-reference.md), [security](SECURITY.md), and the
+[GitHub releases](https://github.com/cyyprezz/krita-codex-mcp/releases).
 
 ## License
 
 Released under the [MIT License](LICENSE). Copyright (c) 2026 Nicklas Desens.
-
-## Plugin structure
-
-The Qt-main-thread bridge keeps `service.py` as a small composition and dispatch entrypoint.
-Document, canvas, selection/editing, layer-tree operations, layer transforms, painting/drawing,
-palette handling, color adjustments, animation/region assets, managed packages, shared context
-and validation behavior live in focused sibling modules under `krita-plugin/kritacodexbridge`;
-the public bridge operations and error payloads do not depend on that internal split.
-
-The STDIO side follows the same boundary: `service.py` is a compatibility facade, while core,
-editing, layer, drawing, color, asset and shared input validation live in focused modules under
-`src/krita_codex_mcp`. Tool registration is grouped into core, creation and asset modules, with
-`server.py` limited to composition and startup. This keeps the MCP schema stable without
-rebuilding another monolith.
-
-## Development
-
-```powershell
-uv sync --all-groups --python 3.12
-$env:PYTHONPATH = "src"
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-.\.venv\Scripts\ruff.exe check .
-.\.venv\Scripts\python.exe scripts\verify_release.py
-.\.venv\Scripts\python.exe -m build
-```
-
-To test the wheel produced by that build without using PyPI:
-
-```powershell
-uvx --from .\dist\krita_codex_mcp-0.1.0-py3-none-any.whl `
-  krita-codex-install install `
-  --allowed-root "C:\Krita Work"
-```
-
-Inspect both wheel and sdist contents, build a wheel again from the sdist, and run the local-wheel
-`uvx` smoke before any release. Installation and development do not publish packages, commits or
-releases.
