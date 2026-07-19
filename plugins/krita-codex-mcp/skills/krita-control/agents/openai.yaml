@@ -1,0 +1,4 @@
+interface:
+  display_name: "Krita Control"
+  short_description: "Control Krita safely through local MCP"
+  default_prompt: "Use $krita-control to inspect and edit the active Krita document safely."

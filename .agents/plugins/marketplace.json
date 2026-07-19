@@ -1,0 +1,20 @@
+{
+  "name": "krita-codex",
+  "interface": {
+    "displayName": "Krita Codex"
+  },
+  "plugins": [
+    {
+      "name": "krita-codex-mcp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/krita-codex-mcp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "krita": {
+      "title": "Krita Codex MCP",
+      "description": "Control a local Krita session through the authenticated Krita Codex Bridge.",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "krita-codex-mcp==0.2.0",
+        "krita-codex-mcp"
+      ],
+      "startup_timeout_sec": 60,
+      "tool_timeout_sec": 210
+    }
+  }
+}
