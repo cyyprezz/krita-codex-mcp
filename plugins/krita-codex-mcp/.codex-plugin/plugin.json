@@ -1,0 +1,37 @@
+{
+  "name": "krita-codex-mcp",
+  "version": "0.1.0",
+  "description": "Control a local Krita session from Codex with guided, safety-focused workflows.",
+  "author": {
+    "name": "Nicklas Desens",
+    "url": "https://github.com/cyyprezz"
+  },
+  "homepage": "https://github.com/cyyprezz/krita-codex-mcp",
+  "repository": "https://github.com/cyyprezz/krita-codex-mcp",
+  "license": "MIT",
+  "keywords": [
+    "krita",
+    "mcp",
+    "graphics",
+    "local-first"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Krita Codex MCP",
+    "shortDescription": "Control Krita locally through Codex.",
+    "longDescription": "Inspect, edit, paint, save, and export in a local Krita session through an authenticated loopback bridge and version-pinned MCP server.",
+    "developerName": "Nicklas Desens",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/cyyprezz/krita-codex-mcp",
+    "defaultPrompt": [
+      "Check my Krita connection and summarize the active document.",
+      "Preview the active Krita document before editing it.",
+      "Create a Krita document and draw a simple composition."
+    ]
+  }
+}

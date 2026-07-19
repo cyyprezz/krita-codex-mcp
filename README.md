@@ -63,10 +63,29 @@ Then use this order for a real Krita session:
 2. Restart Krita so the installed plugin and shared protocol package are loaded together.
 3. Run the same version's `krita-codex-install check` and require either
    `Ready for productive use.` or the explicit limited-mode success message.
-4. Preview the checkout-free, exactly version-pinned `uvx` Codex block with
-   `krita-codex-install codex-config`.
-5. Apply it only after explicit confirmation, restart Codex, verify `krita_state` and
-   `krita_preview`, and only then start normal work.
+4. Choose either the marketplace plugin below or the direct MCP configuration described afterward.
+
+### Install the Codex plugin from GitHub
+
+The repository includes a public, local-first Codex plugin. It bundles the guided `krita-control`
+skill and starts the version-pinned PyPI MCP server through `uvx`; Krita and the authenticated bridge
+continue to run only on the user's machine.
+
+```powershell
+codex plugin marketplace add cyyprezz/krita-codex-mcp
+codex plugin add krita-codex-mcp@krita-codex
+```
+
+Start a new Codex task after installation, then verify `krita_state` and `krita_preview`. Plugin users
+should not also add a separate `[mcp_servers.krita]` block because the plugin already provides that
+server. Use `codex plugin marketplace upgrade krita-codex` to refresh later repository releases.
+
+### Configure the MCP server directly
+
+If you do not want to install the marketplace plugin, preview the checkout-free, exactly
+version-pinned `uvx` Codex block with `krita-codex-install codex-config`. Apply it only after explicit
+confirmation, restart Codex, verify `krita_state` and `krita_preview`, and only then start normal
+work.
 
 Install and update never close Krita. If the authenticated bridge is running, replacement is
 rejected before any installed files are changed and Krita must be closed manually. A busy local
