@@ -47,9 +47,15 @@ structured error; the bridge never silently switches to a different rendering ba
 
 ## Quick start
 
+A first-time setup has two separate parts: the local bridge must be installed and enabled in Krita,
+then Codex must be connected through either the marketplace plugin or a direct MCP configuration.
+The `codex plugin` commands do **not** install or enable anything in Krita.
+
 This requires a Windows Krita build that passes the live compatibility check and
-[`uv`/`uvx`](https://docs.astral.sh/uv/getting-started/installation/) on `PATH`. Close Krita, make
-sure the allowed directory already exists, and install the current release from PyPI:
+[`uv`/`uvx`](https://docs.astral.sh/uv/getting-started/installation/) on `PATH`.
+
+1. Close Krita, make sure the allowed directory already exists, and install the current release
+   from PyPI:
 
 ```powershell
 uvx --from "krita-codex-mcp==0.2.0" `
@@ -57,19 +63,26 @@ uvx --from "krita-codex-mcp==0.2.0" `
   --allowed-root "C:\Krita Work"
 ```
 
-Then use this order for a real Krita session:
+2. In Krita, open **Settings > Configure Krita > Python Plugin Manager** and enable
+   **Krita Codex Bridge**.
+3. Close and reopen Krita so the installed plugin and shared protocol package are loaded together.
+4. Run the same version's live check:
 
-1. Enable **Krita Codex Bridge** in Krita's Python Plugin Manager.
-2. Restart Krita so the installed plugin and shared protocol package are loaded together.
-3. Run the same version's `krita-codex-install check` and require either
-   `Ready for productive use.` or the explicit limited-mode success message.
-4. Choose either the marketplace plugin below or the direct MCP configuration described afterward.
+```powershell
+uvx --from "krita-codex-mcp==0.2.0" krita-codex-install check
+```
+
+5. Require either `Ready for productive use.` or the explicit limited-mode success message.
+6. Choose exactly one Codex connection method below: the marketplace plugin or the direct MCP
+   configuration.
 
 ### Install the Codex plugin from GitHub
 
 The repository includes a public, local-first Codex plugin. It bundles the guided `krita-control`
 skill and starts the version-pinned PyPI MCP server through `uvx`; Krita and the authenticated bridge
-continue to run only on the user's machine.
+continue to run only on the user's machine. Run these commands only after the Krita bridge has been
+installed, enabled, restarted, and checked as described above. They register the GitHub marketplace
+and install the Codex bundle; they do not modify the Krita installation or enable its Python plugin.
 
 ```powershell
 codex plugin marketplace add cyyprezz/krita-codex-mcp
@@ -78,14 +91,15 @@ codex plugin add krita-codex-mcp@krita-codex
 
 Start a new Codex task after installation, then verify `krita_state` and `krita_preview`. Plugin users
 should not also add a separate `[mcp_servers.krita]` block because the plugin already provides that
-server. Use `codex plugin marketplace upgrade krita-codex` to refresh later repository releases.
+server. For later repository releases, run `codex plugin marketplace upgrade krita-codex`, rerun
+`codex plugin add krita-codex-mcp@krita-codex`, and start another new Codex task.
 
 ### Configure the MCP server directly
 
-If you do not want to install the marketplace plugin, preview the checkout-free, exactly
-version-pinned `uvx` Codex block with `krita-codex-install codex-config`. Apply it only after explicit
-confirmation, restart Codex, verify `krita_state` and `krita_preview`, and only then start normal
-work.
+If you do not want to install the marketplace plugin, use this alternative only after the Krita
+bridge has passed the live check. Preview the checkout-free, exactly version-pinned `uvx` Codex
+block with `krita-codex-install codex-config`. Apply it only after explicit confirmation, restart
+Codex, verify `krita_state` and `krita_preview`, and only then start normal work.
 
 Install and update never close Krita. If the authenticated bridge is running, replacement is
 rejected before any installed files are changed and Krita must be closed manually. A busy local
@@ -97,7 +111,7 @@ worktrees. The generated block uses `uvx`, has no checkout `cwd`, and pins the s
 distribution version as the installed plugin. The installer only changes that file after showing
 the full preview and receiving explicit confirmation. Unmarked or conflicting Krita entries are
 never overwritten. Never commit personal configuration. See the
-[Windows installation guide](docs/windows-installation.md#4-configure-codex) for details.
+[Windows installation guide](docs/windows-installation.md#4-connect-codex) for details.
 
 The preflight checks local configuration, the complete installed hash manifest, wheel/plugin/
 protocol versions, loopback port, authentication and the running Krita capability profile. The
