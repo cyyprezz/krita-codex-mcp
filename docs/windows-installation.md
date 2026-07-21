@@ -5,6 +5,11 @@ to one application version. Krita 5.3.2.1 is the currently tested build. The Pyt
 the STDIO MCP server, the dependency-free shared protocol package, the complete Krita plugin and
 the wheel-native installation manager. A Git checkout is not required for a package installation.
 
+A first-time setup has two separate parts. Steps 1 through 3 install, enable and verify the local
+Krita bridge. Step 4 then connects Codex through either the marketplace plugin or a direct MCP
+configuration. The `codex plugin` commands only configure Codex; they do **not** install the bridge,
+write to Krita's plugin directory, enable the Python plugin or restart Krita.
+
 Prerequisites:
 
 - a Windows Krita installation that passes the live compatibility check;
@@ -95,10 +100,30 @@ avoid affected tools rather than assuming an unavailable feature. Do not start n
 the command ends with either `Ready for productive use.` or
 `Ready for productive use with the reported limitations.`
 
-## 4. Configure Codex
+## 4. Connect Codex
 
-The recommended server command is checkout-free and pinned to exactly the installed distribution
-version:
+Complete steps 1 through 3 first, then choose exactly one of the following options. Do not combine
+the marketplace plugin with a separate `[mcp_servers.krita]` block because both start the same local
+MCP server.
+
+### Option A: Install the Codex plugin from GitHub
+
+The public marketplace plugin bundles the `krita-control` skill and the version-pinned MCP server
+configuration:
+
+```powershell
+codex plugin marketplace add cyyprezz/krita-codex-mcp
+codex plugin add krita-codex-mcp@krita-codex
+```
+
+These commands register the GitHub marketplace and install the Codex bundle only. They do not
+perform any of the Krita installation, activation or restart steps above. Start a new Codex task
+after installation, then call `krita_state` and `krita_preview` before normal work.
+
+### Option B: Configure the MCP server directly
+
+Use this alternative when you do not want the marketplace plugin. The recommended direct server
+command is checkout-free and pinned to exactly the installed distribution version:
 
 ```toml
 [mcp_servers.krita]
@@ -140,7 +165,16 @@ $Version = "<new-version>"
 uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install update
 ```
 
-After updating the payload, preview and explicitly update the managed Codex block to the same
+After updating the payload, refresh the Codex connection that you selected in step 4.
+
+Marketplace plugin users refresh the marketplace and reinstall its current entry:
+
+```powershell
+codex plugin marketplace upgrade krita-codex
+codex plugin add krita-codex-mcp@krita-codex
+```
+
+Direct-configuration users preview and explicitly update the managed Codex block to the same
 version:
 
 ```powershell
@@ -148,7 +182,8 @@ uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install codex-confi
 uvx --refresh --from "krita-codex-mcp==$Version" krita-codex-install codex-config --apply
 ```
 
-Restart Krita and Codex, then run the full preflight. Replace `<new-version>` with the version shown
+Restart Krita and run the full preflight. Direct-configuration users must also restart Codex;
+marketplace plugin users must start a new Codex task. Replace `<new-version>` with the version shown
 on PyPI. A checkout-based legacy installation is migrated by `install`; its existing configuration
 and allowed roots are kept. The checkout and its `.venv` are not removed.
 

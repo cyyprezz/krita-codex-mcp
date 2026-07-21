@@ -66,6 +66,27 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertIn("krita_preview", skill)
         self.assertIn("operation_may_complete=true", skill)
 
+    def test_installation_docs_require_krita_setup_before_codex_plugin(self) -> None:
+        documents = (
+            (ROOT / "README.md").read_text(encoding="utf-8"),
+            (ROOT / "docs" / "windows-installation.md").read_text(encoding="utf-8"),
+        )
+
+        for document in documents:
+            with self.subTest(document=document[:40]):
+                self.assertIn("krita-codex-install install", document)
+                self.assertIn("Python Plugin Manager", document)
+                self.assertIn("krita-codex-install check", document)
+                self.assertIn("codex plugin marketplace add", document)
+                self.assertIn("codex plugin add krita-codex-mcp@krita-codex", document)
+                self.assertLess(
+                    document.index("krita-codex-install install"),
+                    document.index("codex plugin marketplace add"),
+                )
+
+        self.assertIn("commands do **not** install or enable anything in Krita", documents[0])
+        self.assertIn("commands only configure Codex; they do **not** install", documents[1])
+
 
 if __name__ == "__main__":
     unittest.main()
