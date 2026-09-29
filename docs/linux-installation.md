@@ -39,7 +39,8 @@ uv run krita-codex-install install --allowed-root "$HOME/krita-codex-work"
 
 ## 2. Enable the plugin
 
-In Krita, open **Settings > Configure Krita > Python Plugin Manager**, enable
+In Krita, open **Settings > Configure Krita > Python Plugin Manager** (French interface:
+**Paramètres > Configuration de Krita > Gestionnaire de modules Python**), enable
 **Krita Codex Bridge**, then restart Krita.
 
 ## 3. Run the preflight
