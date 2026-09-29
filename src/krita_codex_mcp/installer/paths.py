@@ -5,6 +5,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from krita_codex_protocol.platform_dirs import (
+    uses_windows_layout,
+    xdg_config_dir,
+    xdg_pykrita_root,
+)
+
 from .errors import InstallerError
 
 
@@ -23,15 +29,20 @@ class InstallPaths:
     @classmethod
     def from_environment(cls, environment: Mapping[str, str] | None = None) -> InstallPaths:
         env = environment if environment is not None else os.environ
-        app_data = env.get("APPDATA")
-        local_app_data = env.get("LOCALAPPDATA")
-        user_profile = env.get("USERPROFILE") or env.get("HOME")
-        if not app_data or not local_app_data or not user_profile:
-            raise InstallerError(
-                "APPDATA, LOCALAPPDATA and USERPROFILE are required for a Windows installation."
-            )
-        pykrita_root = Path(app_data) / "krita" / "pykrita"
-        config_dir = Path(local_app_data) / "krita-codex-mcp"
+        if uses_windows_layout(env):
+            app_data = env.get("APPDATA")
+            local_app_data = env.get("LOCALAPPDATA")
+            user_profile = env.get("USERPROFILE") or env.get("HOME")
+            if not app_data or not local_app_data or not user_profile:
+                raise InstallerError(
+                    "APPDATA, LOCALAPPDATA and USERPROFILE are required for a Windows installation."
+                )
+            pykrita_root = Path(app_data) / "krita" / "pykrita"
+            config_dir = Path(local_app_data) / "krita-codex-mcp"
+        else:
+            user_profile = env.get("HOME") or str(Path.home())
+            pykrita_root = xdg_pykrita_root(env)
+            config_dir = xdg_config_dir(env)
         return cls(
             pykrita_root=pykrita_root,
             plugin_dir=pykrita_root / "kritacodexbridge",
