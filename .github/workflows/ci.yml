@@ -33,6 +33,8 @@ jobs:
       - name: Test, lint, and build
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           uv sync --locked --all-groups --python 3.12
           $env:PYTHONPATH = "src"
           python scripts/verify_release.py
@@ -43,6 +45,8 @@ jobs:
       - name: Verify distributions and local wheel execution
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
           $sdist = Get-ChildItem -LiteralPath dist -Filter *.tar.gz | Select-Object -First 1
           python scripts/verify_distribution.py $wheel.FullName $sdist.FullName

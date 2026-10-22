@@ -99,7 +99,7 @@ class TransformCheckpointTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(raised.exception.code, "DOCUMENT_REOPEN_FAILED")
         self.assertTrue(raised.exception.details["document_closed"])
-        self.assertEqual(raised.exception.details["path"], str(self.path))
+        self.assertEqual(raised.exception.details["path"], str(self.path.resolve()))
 
     @patch("krita_codex_mcp.transform_checkpoint.asyncio.sleep", new_callable=AsyncMock)
     async def test_missing_stable_uuid_fails_before_transform(self, _sleep: AsyncMock) -> None:
