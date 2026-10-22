@@ -20,7 +20,12 @@ class InstallerLock:
         self._handle = None
 
     def __enter__(self) -> InstallerLock:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            if os.name != "nt":
+                self.path.parent.chmod(0o700)
+        except OSError as exc:
+            raise InstallerError("Cannot secure the installer configuration directory.") from exc
         handle = self.path.open("a+b")
         try:
             if handle.seek(0, os.SEEK_END) == 0:

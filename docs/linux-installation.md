@@ -22,8 +22,17 @@ Final layout, with no `XDG_*` variable set:
 | Configuration, transaction journal, lock | `$XDG_CONFIG_HOME/krita-codex-mcp` | `~/.config/krita-codex-mcp` |
 | Plugin log | `$XDG_STATE_HOME/krita-codex-mcp` | `~/.local/state/krita-codex-mcp` |
 
-`KRITA_CODEX_CONFIG` (an absolute path) still overrides the configuration path. No step needs
-`sudo`: `pykrita_root` is the Krita plugin folder, unrelated to the root account.
+`KRITA_CODEX_CONFIG` (an absolute path) overrides the configuration path for the MCP server and
+Krita plugin only. Installer commands always manage the default XDG configuration shown above;
+they do not follow this runtime override. Leave it unset for the installation described here.
+
+The installer keeps its application configuration directory private (`0700`) and writes token
+files with mode `0600`, including staging and recovery snapshots. It also tightens existing
+configuration permissions before update or uninstall. If an older installation's token may have
+been readable by another user, close Krita and reinstall with `--reset-config` and `--allowed-root`
+to generate a new token, then restart Krita.
+
+No step needs `sudo`: `pykrita_root` is the Krita plugin folder, unrelated to the root account.
 
 Prerequisites: Krita with Python scripting, `uv` on `PATH`, and one narrow directory for KRA and
 export access. Run every command below from the root of your checkout (the directory that contains

@@ -10,9 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows / Python 3.12
-    runs-on: windows-latest
+  test:
+    name: ${{ matrix.os }} / Python 3.12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6

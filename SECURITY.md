@@ -14,6 +14,13 @@ This project is pre-1.0. Security fixes are provided for the current `main` bran
 
 This project is designed for one Windows user controlling one local Krita process.
 
+The experimental Linux checkout installation uses the same per-user, loopback-only model.
+Its installer makes the application configuration directory private (`0700`) and creates token
+files with mode `0600` before writing them, including staged and recovered copies. Runtime
+configurations selected manually with `KRITA_CODEX_CONFIG` must also be kept private. See the
+[Linux installation guide](docs/linux-installation.md) for paths and token replacement after an
+older installation may have exposed its configuration to another local user.
+
 - The MCP transport is STDIO; the internal bridge binds only to `127.0.0.1`.
 - Every bridge request requires a random bearer token from the current user's LocalAppData.
 - The wheel and generated installation manifest contain no bearer token or local configuration.
