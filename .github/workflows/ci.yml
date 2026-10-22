@@ -61,3 +61,13 @@ jobs:
 
           uvx --from $wheel.FullName krita-codex-install --version
           python scripts/stdio_surface_smoke.py $wheel.FullName
+
+      - name: Verify current Codex configuration and MCP discovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm install --global @openai/codex@0.163.0 --no-audit --no-fund
+          $env:PYTHONPATH = "src"
+          $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
+          python scripts/codex_compatibility_smoke.py $wheel.FullName
