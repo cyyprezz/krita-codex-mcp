@@ -6,8 +6,10 @@ import json
 import os
 import secrets
 import shutil
+import subprocess
 import tempfile
 import tomllib
+from contextlib import ExitStack
 from pathlib import Path
 
 from stdio_surface_smoke import EXPECTED_TOOLS
@@ -35,7 +37,7 @@ async def smoke(wheel: Path) -> None:
     uvx = shutil.which("uvx")
     if codex is None or uvx is None:
         raise RuntimeError("Codex CLI and uvx must be installed")
-    with tempfile.TemporaryDirectory() as directory:
+    with tempfile.TemporaryDirectory() as directory, ExitStack() as cleanup:
         root = Path(directory).resolve()
         codex_home = root / "codex-home"
         codex_home.mkdir()
@@ -47,6 +49,17 @@ async def smoke(wheel: Path) -> None:
         }
         environment.pop("KRITA_CODEX_CONFIG", None)
         environment["CODEX_HOME"] = str(codex_home)
+        # Codex may leave its managed daemon running after the stdio client exits.
+        # Stop only this temporary profile before removing files it can still write.
+        cleanup.callback(
+            subprocess.run,
+            [codex, "app-server", "daemon", "stop"],
+            cwd=root,
+            env=environment,
+            check=True,
+            timeout=30,
+            stdout=subprocess.DEVNULL,
+        )
         generated = managed_block(__version__)
         launcher = tomllib.loads(generated)["mcp_servers"]["krita"]
         config_path.write_text(generated + "\n", encoding="utf-8")
@@ -166,7 +179,7 @@ async def smoke(wheel: Path) -> None:
                 logs = "Codex diagnostic stream did not close after shutdown."
             if failed or process.returncode not in (0, None):
                 print(logs[-4000:])
-        print("Codex compatibility: generated config, plugin commands and 13 MCP tools verified")
+    print("Codex compatibility: generated config, plugin commands and 13 MCP tools verified")
 
 
 def main() -> None:
