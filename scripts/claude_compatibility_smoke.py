@@ -25,18 +25,47 @@ from krita_codex_mcp.installer.paths import InstallPaths
 
 
 class LocalModelStub(BaseHTTPRequestHandler):
+    requests = 0
+
     def log_message(self, format: str, *args: object) -> None:
         pass
 
     def do_POST(self) -> None:
-        self.rfile.read(int(self.headers.get("Content-Length", "0")))
-        # A failed model request is intentional: tools load before inference.
-        body = json.dumps({
-            "type": "error",
-            "error": {"type": "authentication_error", "message": "Local discovery test only."},
-        }).encode()
-        self.send_response(401)
-        self.send_header("Content-Type", "application/json")
+        request = json.loads(self.rfile.read(int(self.headers.get("Content-Length", "0"))))
+        if self.path.startswith("/v1/messages/count_tokens"):
+            body = json.dumps({"input_tokens": 1}).encode()
+            content_type = "application/json"
+        else:
+            type(self).requests += 1
+            message = {
+                "id": "msg_local_discovery", "type": "message", "role": "assistant",
+                "model": request["model"], "content": [], "stop_reason": None,
+                "stop_sequence": None, "usage": {"input_tokens": 1, "output_tokens": 0},
+            }
+            answer = "Local MCP discovery stub."
+            if request.get("stream"):
+                events = [
+                    {"type": "message_start", "message": message},
+                    {"type": "content_block_start", "index": 0,
+                     "content_block": {"type": "text", "text": ""}},
+                    {"type": "content_block_delta", "index": 0,
+                     "delta": {"type": "text_delta", "text": answer}},
+                    {"type": "content_block_stop", "index": 0},
+                    {"type": "message_delta", "delta": {"stop_reason": "end_turn",
+                     "stop_sequence": None}, "usage": {"output_tokens": 1}},
+                    {"type": "message_stop"},
+                ]
+                body = "".join(
+                    f"event: {event['type']}\ndata: {json.dumps(event)}\n\n" for event in events
+                ).encode()
+                content_type = "text/event-stream"
+            else:
+                message.update(content=[{"type": "text", "text": answer}], stop_reason="end_turn")
+                message["usage"]["output_tokens"] = 1
+                body = json.dumps(message).encode()
+                content_type = "application/json"
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -125,7 +154,7 @@ def smoke(wheel: Path) -> None:
             try:
                 try:
                     result = subprocess.run(
-                        [claude, "--print", "--verbose", "--output-format", "stream-json",
+                        [claude, "--bare", "--print", "--verbose", "--output-format", "stream-json",
                          "--strict-mcp-config", "--mcp-config", str(config),
                          "--setting-sources", "", "--debug-file", str(diagnostics),
                          "--max-turns", "1", "Reply with OK."],
@@ -141,6 +170,8 @@ def smoke(wheel: Path) -> None:
                 endpoint.shutdown()
                 thread.join(timeout=5)
         try:
+            if result.returncode != 0 or LocalModelStub.requests == 0:
+                raise RuntimeError("Claude did not complete against the local model stub")
             names = discovered_tools(result.stdout)
             if names != EXPECTED_TOOLS:
                 raise RuntimeError(f"Unexpected Claude MCP tools: {sorted(names)}")

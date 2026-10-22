@@ -169,8 +169,9 @@ restart the app. Neither action uninstalls the bridge; keep it if Codex still us
   `scripts/claude_compatibility_smoke.py` against the built wheel. It uses an isolated
   `CLAUDE_CONFIG_DIR`, exercises `mcp add-json`, then requires a connected server and exactly
   13 named tools in Claude Code's own `system/init` event. Only the package source is replaced
-  with the candidate wheel. The model endpoint is a loopback stub returning an intentional
-  authentication error; no real model/key, paid inference or Krita GUI is used.
+  with the candidate wheel. Bare mode excludes host hooks/plugins and keychain credentials.
+  The model endpoint is a loopback stub returning a fixed streaming response, and the client
+  must exit successfully. No real model/key, paid inference or Krita GUI is used.
 - **Codex regression:** its existing pinned CLI `0.163.0` discovery test remains in CI.
 - **Still manual:** Claude Desktop GUI discovery, model-driven tool use, image presentation
   and live Claude-to-Krita operations. A successful JSON check or SDK handshake cannot prove
@@ -185,3 +186,4 @@ restart the app. Neither action uninstalls the bridge; keep it if Codex still us
 - [Local MCP servers in Claude Desktop](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop)
 - [Official MCP local-server configuration walkthrough](https://modelcontextprotocol.io/docs/develop/connect-local-servers)
 - [Claude Code 2.1.308](https://github.com/anthropics/claude-code/releases/tag/v2.1.308)
+- [Claude Code bare/headless mode](https://code.claude.com/docs/en/headless)
