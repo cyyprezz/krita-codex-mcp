@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .platform_dirs import uses_windows_layout, xdg_config_dir
+
 
 class ConfigError(ValueError):
     """Raised when the shared local bridge configuration is unsafe or invalid."""
@@ -19,6 +21,8 @@ def default_config_path() -> Path:
         if not path.is_absolute():
             raise ConfigError("KRITA_CODEX_CONFIG must be an absolute path")
         return path
+    if not uses_windows_layout():
+        return xdg_config_dir() / "config.json"
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         raise ConfigError("LOCALAPPDATA is not set; set KRITA_CODEX_CONFIG explicitly")

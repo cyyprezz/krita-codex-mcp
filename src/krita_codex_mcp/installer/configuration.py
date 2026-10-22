@@ -147,10 +147,15 @@ def prepare_config(
 
 def write_staged_config(path: Path, config: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(config, indent=2, ensure_ascii=False) + "\n",
-        encoding="utf-8",
-    )
+    encoded = json.dumps(config, indent=2, ensure_ascii=False) + "\n"
+    if os.name == "nt":
+        path.write_text(encoded, encoding="utf-8")
+    else:
+        # Staging paths are unique. Publish no token bytes before the file is private,
+        # and never truncate an unexpected existing file or follow a staged symlink.
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(encoded)
     try:
         BridgeConfig.load(path)
     except ConfigError as exc:

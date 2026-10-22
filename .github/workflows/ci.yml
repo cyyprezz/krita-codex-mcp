@@ -10,9 +10,13 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    name: Windows / Python 3.12
-    runs-on: windows-latest
+  test:
+    name: ${{ matrix.os }} / Python 3.12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -29,6 +33,8 @@ jobs:
       - name: Test, lint, and build
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           uv sync --locked --all-groups --python 3.12
           $env:PYTHONPATH = "src"
           python scripts/verify_release.py
@@ -39,6 +45,8 @@ jobs:
       - name: Verify distributions and local wheel execution
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
           $sdist = Get-ChildItem -LiteralPath dist -Filter *.tar.gz | Select-Object -First 1
           python scripts/verify_distribution.py $wheel.FullName $sdist.FullName

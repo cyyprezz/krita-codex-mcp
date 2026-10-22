@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterable, Mapping
 from contextlib import suppress
 from pathlib import Path
@@ -185,6 +186,17 @@ class InstallationManager:
 
     def _recover_incomplete_transaction(self) -> None:
         config_paths = incomplete_transaction_config_paths(self.paths)
+        if os.name != "nt":
+            for path in dict.fromkeys([self.paths.config_file, *config_paths]):
+                try:
+                    if path.is_symlink():
+                        raise InstallerError("Bridge configuration snapshots must not be symlinks.")
+                    if path.exists():
+                        if not path.is_file():
+                            raise InstallerError("Bridge configuration snapshots must be files.")
+                        path.chmod(0o600)
+                except OSError as exc:
+                    raise InstallerError("Cannot secure an existing bridge configuration.") from exc
         if not config_paths:
             return
         ports = {

@@ -5,10 +5,14 @@ import os
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
+from krita_codex_protocol.platform_dirs import uses_windows_layout, xdg_state_dir
+
 LOGGER_NAME = "krita-codex-mcp"
 
 
 def bridge_log_path() -> Path | None:
+    if not uses_windows_layout():
+        return xdg_state_dir() / "bridge.log"
     local_app_data = os.environ.get("LOCALAPPDATA")
     if not local_app_data:
         return None
