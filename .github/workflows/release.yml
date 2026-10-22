@@ -2,6 +2,10 @@ name: Release
 
 on:
   push:
+    branches:
+      - main
+    paths:
+      - .github/release-request.json
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
@@ -9,25 +13,46 @@ permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
+  release-metadata:
+    name: Validate explicit release intent
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+    steps:
+      - name: Check out the requested commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - name: Resolve the version-matched tag or main release request
+        id: metadata
+        shell: bash
+        run: |
+          tag=$(python3 scripts/verify_release.py --release-ref "$GITHUB_REF")
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build and verify / ${{ matrix.os }} / Python 3.12
+    needs: release-metadata
+    env:
+      KRITA_RELEASE_TAG: ${{ needs.release-metadata.outputs.tag }}
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Check out tagged source
+      - name: Check out release source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require a tagged main commit
+      - name: Require release source to be contained in main
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
@@ -52,7 +77,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           uv sync --locked --all-groups --python 3.12
           $env:PYTHONPATH = "src"
-          python scripts/verify_release.py --tag $env:GITHUB_REF_NAME
+          python scripts/verify_release.py --tag $env:KRITA_RELEASE_TAG
           python -m unittest discover -s tests -v
           ruff check .
           python -m build
@@ -98,9 +123,30 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  tag-release:
+    name: Create requested tag after both platform checks
+    needs: [release-metadata, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create an immutable tag for the verified main commit
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KRITA_RELEASE_TAG: ${{ needs.release-metadata.outputs.tag }}
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/tags/$KRITA_RELEASE_TAG" -f sha="$GITHUB_SHA"
+
+      - name: Record the validated release source
+        env:
+          KRITA_RELEASE_TAG: ${{ needs.release-metadata.outputs.tag }}
+        run: printf 'Release %s from verified commit %s\n' "$KRITA_RELEASE_TAG" "$GITHUB_SHA"
+
   publish-pypi:
     name: Publish verified distributions to PyPI
-    needs: build
+    needs: [build, tag-release]
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -123,8 +169,10 @@ jobs:
 
   verify-pypi:
     name: Verify published PyPI distributions
-    needs: publish-pypi
+    needs: [publish-pypi, release-metadata]
     runs-on: ubuntu-latest
+    env:
+      KRITA_RELEASE_TAG: ${{ needs.release-metadata.outputs.tag }}
     steps:
       - name: Download verified release distributions
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -144,7 +192,7 @@ jobs:
           import urllib.request
           from pathlib import Path
 
-          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          version = os.environ["KRITA_RELEASE_TAG"].removeprefix("v")
           expected = {
               path.name: hashlib.sha256(path.read_bytes()).hexdigest()
               for path in Path("dist").iterdir()
@@ -168,8 +216,10 @@ jobs:
 
   github-release:
     name: Create GitHub release
-    needs: verify-pypi
+    needs: [verify-pypi, release-metadata]
     runs-on: ubuntu-latest
+    env:
+      KRITA_RELEASE_TAG: ${{ needs.release-metadata.outputs.tag }}
     permissions:
       contents: write
     steps:
@@ -183,15 +233,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
+          if gh release view "$KRITA_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$KRITA_RELEASE_TAG" dist/*.whl dist/*.tar.gz \
               --repo "$GITHUB_REPOSITORY"
-            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            gh release edit "$KRITA_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
               --prerelease=false --latest
           else
-            gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
+            gh release create "$KRITA_RELEASE_TAG" dist/*.whl dist/*.tar.gz \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \
               --generate-notes \
-              --title "Krita Codex MCP $GITHUB_REF_NAME"
+              --title "Krita Codex MCP $KRITA_RELEASE_TAG"
           fi

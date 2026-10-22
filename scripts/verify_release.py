@@ -27,6 +27,19 @@ def _version(repo_root: Path) -> str:
     return match.group(1)
 
 
+def resolve_release_tag(version: str, *, ref: str, request: object = None) -> str:
+    if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is None:
+        raise ReleaseContractError("Release requests require a stable semantic version")
+    tag = f"v{version}"
+    if ref == f"refs/tags/{tag}":
+        return tag
+    if ref == "refs/heads/main" and request == {"version": version}:
+        return tag
+    raise ReleaseContractError(
+        "Release requires a matching tag or an exact versioned request on main"
+    )
+
+
 def verify_release(repo_root: Path = REPO_ROOT, *, tag: str | None = None) -> str:
     version = _version(repo_root)
     expected_tag = f"v{version}"
@@ -87,7 +100,7 @@ def verify_release(repo_root: Path = REPO_ROOT, *, tag: str | None = None) -> st
         "id-token: write",
         "pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b",
         "attestations: true",
-        "needs: publish-pypi",
+        "needs: [publish-pypi, release-metadata]",
         "gh release create",
     )
     missing = [fragment for fragment in required_workflow_fragments if fragment not in workflow]
@@ -112,9 +125,22 @@ def verify_release(repo_root: Path = REPO_ROOT, *, tag: str | None = None) -> st
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--tag")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--tag")
+    mode.add_argument("--release-ref")
     args = parser.parse_args()
     version = verify_release(tag=args.tag)
+    if args.release_ref is not None:
+        request = None
+        if args.release_ref == "refs/heads/main":
+            try:
+                request = json.loads(
+                    (REPO_ROOT / ".github" / "release-request.json").read_text(encoding="utf-8")
+                )
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ReleaseContractError("Cannot read the explicit release request") from exc
+        print(resolve_release_tag(version, ref=args.release_ref, request=request))
+        return
     print(f"Release contract OK for v{version}")
 
 
