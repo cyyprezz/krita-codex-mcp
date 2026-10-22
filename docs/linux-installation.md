@@ -1,5 +1,8 @@
 # Linux installation
 
+For Claude Code or Claude Desktop (Linux beta), complete the bridge setup and preflight here,
+then use the [Claude installation guide](claude-installation.md). Linux remains experimental.
+
 The `0.2.2` package installs the bridge on Linux without a Git checkout.
 Windows paths (`%APPDATA%`, `%LOCALAPPDATA%`) are
 replaced by the XDG base directories; a Windows environment keeps its layout unchanged.

@@ -2,7 +2,7 @@
 
 <!-- mcp-name: io.github.cyyprezz/krita-codex-mcp -->
 
-Control Krita from OpenAI Codex through a secure local
+Control Krita from OpenAI Codex or Anthropic Claude through a secure local
 Model Context Protocol (MCP) server for Windows and Linux.
 
 [PyPI package](https://pypi.org/project/krita-codex-mcp/) ·
@@ -11,12 +11,16 @@ Model Context Protocol (MCP) server for Windows and Linux.
 [Linux installation guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/linux-installation.md) ·
 [Codex and MCP compatibility](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/codex-compatibility.md)
 
-A local MCP server that lets Codex inspect and control Krita through a small,
+A local MCP server that lets Codex and Claude inspect and control Krita through a small,
 authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listens only on
 `127.0.0.1`, validates a shared bearer token, and dispatches every Krita API call to Qt's main
 thread.
 
 Windows is the original supported platform; Linux support is experimental.
+For Claude Code and Claude Desktop setup, supported platforms and test limits, see the
+[Claude installation guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/claude-installation.md).
+Both clients use the same STDIO server and authenticated Krita bridge. The package and
+Codex plugin retain their existing names.
 Both platforms use a capability-based runtime compatibility check. Krita 5.3.2.1 on Windows is a
 tested build, not a hard version requirement. The server deliberately
 exposes a small set of cohesive tools instead of a large collection of micro-tools:
@@ -62,7 +66,8 @@ Krita plugin and Codex server on that same exact version; the marketplace launch
 Other Linux distributions and Krita builds require their own live preflight.
 
 A first-time setup has two separate parts: the local bridge must be installed and enabled in Krita,
-then Codex must be connected through either the marketplace plugin or a direct MCP configuration.
+then connect Codex through its marketplace plugin or direct MCP configuration, or
+[configure Claude](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/claude-installation.md).
 The `codex plugin` commands do **not** install or enable anything in Krita.
 
 Krita must include Python scripting, pass the live compatibility check, and have

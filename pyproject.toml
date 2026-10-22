@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "krita-codex-mcp"
 dynamic = ["version"]
-description = "Local MCP bridge for reliable Krita control from Codex on Windows and Linux"
+description = "Local MCP bridge for reliable Krita control from Codex and Claude on Windows and Linux"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

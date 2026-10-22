@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 
 from krita_codex_mcp import __version__
 
+from .claude_config import claude_server_config
 from .codex_config import apply_codex_config_change, plan_codex_config_change
 from .errors import InstallerError
 from .manager import InstallationManager
@@ -50,6 +52,14 @@ def build_parser() -> argparse.ArgumentParser:
     codex.add_argument("--apply", action="store_true")
     codex.add_argument("--yes", action="store_true")
     codex.add_argument("--remove", action="store_true")
+    claude = commands.add_parser(
+        "claude-config", help="Print Claude MCP JSON without changing any configuration."
+    )
+    claude.add_argument("--client", choices=("code", "desktop"), default="code")
+    claude.add_argument(
+        "--server-only", action="store_true", help="Print the add-json server entry."
+    )
+    claude.add_argument("--uvx", help="Absolute uvx executable path; defaults to PATH lookup.")
     return parser
 
 
@@ -66,7 +76,11 @@ def run(arguments: Sequence[str] | None = None) -> int:
     try:
         paths = InstallPaths.from_environment()
         manager = InstallationManager(paths)
-        if args.command == "install":
+        if args.command == "claude-config":
+            server = claude_server_config(paths, __version__, client=args.client, uvx=args.uvx)
+            result = server if args.server_only else {"mcpServers": {"krita": server}}
+            print(json.dumps(result, indent=2, ensure_ascii=True))
+        elif args.command == "install":
             manager.install(
                 allowed_roots=args.allowed_root,
                 port=args.port,
