@@ -72,3 +72,13 @@ jobs:
           $env:PYTHONPATH = "src"
           $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
           python scripts/codex_compatibility_smoke.py $wheel.FullName
+
+      - name: Verify Claude Code configuration and MCP discovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm install --global @anthropic-ai/claude-code@2.1.308 --no-audit --no-fund
+          $env:PYTHONPATH = "src"
+          $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
+          python scripts/claude_compatibility_smoke.py $wheel.FullName

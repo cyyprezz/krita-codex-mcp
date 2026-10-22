@@ -1,5 +1,8 @@
 # Windows installation
 
+For Claude Code or Claude Desktop, complete the bridge setup and preflight here, then use
+the [Claude installation guide](claude-installation.md) instead of the Codex client setup.
+
 Krita compatibility is checked against the running Windows installation instead of being pinned
 to one application version. Krita 5.3.2.1 is the currently tested build. The Python wheel contains
 the STDIO MCP server, the dependency-free shared protocol package, the complete Krita plugin and
