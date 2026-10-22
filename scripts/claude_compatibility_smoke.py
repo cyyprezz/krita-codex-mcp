@@ -67,6 +67,10 @@ def smoke(wheel: Path) -> None:
         root = Path(directory).resolve()
         profile = root / "claude-profile"
         profile.mkdir()
+        unrelated = {"type": "stdio", "command": uvx, "args": ["--version"]}
+        (profile / ".claude.json").write_text(
+            json.dumps({"mcpServers": {"unrelated": unrelated}}), encoding="utf-8"
+        )
         environment = {
             name: value for name, value in os.environ.items()
             if not name.startswith(("ANTHROPIC_", "CLAUDE_", "AWS_", "GOOGLE_", "OPENAI_"))
@@ -111,17 +115,28 @@ def smoke(wheel: Path) -> None:
         saved = json.loads((profile / ".claude.json").read_text(encoding="utf-8"))
         if saved.get("mcpServers", {}).get("krita") != launcher:
             raise RuntimeError("Claude Code did not preserve the supplied server entry")
+        if saved.get("mcpServers", {}).get("unrelated") != unrelated:
+            raise RuntimeError("Claude Code changed an unrelated MCP server entry")
+        diagnostics = root / "claude-debug.log"
         with ThreadingHTTPServer(("127.0.0.1", 0), LocalModelStub) as endpoint:
             environment["ANTHROPIC_BASE_URL"] = f"http://127.0.0.1:{endpoint.server_port}"
             thread = threading.Thread(target=endpoint.serve_forever, daemon=True)
             thread.start()
             try:
-                result = subprocess.run(
-                    [claude, "--print", "--verbose", "--output-format", "stream-json",
-                     "--strict-mcp-config", "--mcp-config", str(config),
-                     "--setting-sources", "", "--max-turns", "1", "Reply with OK."],
-                    cwd=root, env=environment, capture_output=True, text=True, timeout=120,
-                )
+                try:
+                    result = subprocess.run(
+                        [claude, "--print", "--verbose", "--output-format", "stream-json",
+                         "--strict-mcp-config", "--mcp-config", str(config),
+                         "--setting-sources", "", "--debug-file", str(diagnostics),
+                         "--max-turns", "1", "Reply with OK."],
+                        cwd=root, env=environment, stdin=subprocess.DEVNULL,
+                        capture_output=True, text=True, timeout=90,
+                    )
+                except subprocess.TimeoutExpired as exc:
+                    print(f"Claude timed out; stdout: {exc.stdout!r}; stderr: {exc.stderr!r}")
+                    if diagnostics.is_file():
+                        print(diagnostics.read_text(encoding="utf-8")[-10000:])
+                    raise
             finally:
                 endpoint.shutdown()
                 thread.join(timeout=5)
@@ -132,6 +147,8 @@ def smoke(wheel: Path) -> None:
         except RuntimeError:
             print(result.stdout[-6000:])
             print(result.stderr[-4000:])
+            if diagnostics.is_file():
+                print(diagnostics.read_text(encoding="utf-8")[-10000:])
             raise
     print("Claude Code: generated JSON accepted and 13 wheel tools discovered; no model/Krita test")
 
