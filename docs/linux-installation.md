@@ -61,9 +61,36 @@ uv run krita-codex-install check             # Krita restarted
 
 Expected result: `compatible` or `limited`, never `incompatible`.
 
-## 4. Connect an MCP client
+## 4. Connect Codex
 
-Use the checkout, not PyPI: the published `0.2.0` package predates the XDG rule. JSON does not
+After the live preflight passes, add this block to your user-level `~/.codex/config.toml`.
+Replace `/absolute/path/to/krita-codex-mcp` with the checkout directory containing `pyproject.toml`:
+
+```toml
+[mcp_servers.krita]
+command = "uv"
+args = ["run", "--frozen", "--directory", "/absolute/path/to/krita-codex-mcp", "krita-codex-mcp"]
+env_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]
+startup_timeout_sec = 60
+tool_timeout_sec = 210
+```
+
+Use an absolute path; TOML does not expand `$HOME` or shell variables inside these strings.
+Restart Codex, inspect `codex mcp list` or `/mcp`, then call `krita_state` and `krita_preview` in a
+new task. Codex and Krita must run on the same computer and resolve the same XDG environment.
+Codex filters the environment of MCP subprocesses; `env_vars` explicitly forwards custom XDG
+paths. Launch Codex from an environment containing those same values, or set their absolute
+values in a `[mcp_servers.krita.env]` table if your desktop launcher does not inherit them.
+
+The marketplace plugin and the installer's `codex-config` command currently generate a launcher
+pinned to the published `0.2.0` package. That package predates the XDG fixes. Use the checkout block
+above for Linux and configure Krita only once in Codex.
+
+See [Codex/MCP compatibility](codex-compatibility.md) for the checked client and protocol boundary.
+
+## 5. Other MCP clients
+
+For opencode, use the checkout rather than PyPI. JSON does not
 expand variables, so this command prints the block for opencode already filled in with your
 checkout path; paste it into `~/.config/opencode/opencode.jsonc`:
 
