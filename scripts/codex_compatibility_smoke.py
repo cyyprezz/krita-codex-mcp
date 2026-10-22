@@ -57,7 +57,8 @@ async def smoke(wheel: Path) -> None:
             cwd=root,
             env=environment,
             check=True,
-            timeout=30,
+            # Cover Codex's 60-second grace and 10-second forced-stop confirmation.
+            timeout=120,
             stdout=subprocess.DEVNULL,
         )
         generated = managed_block(__version__)
