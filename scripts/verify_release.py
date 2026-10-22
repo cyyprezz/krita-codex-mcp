@@ -98,7 +98,7 @@ def verify_release(repo_root: Path = REPO_ROOT, *, tag: str | None = None) -> st
         "python scripts/verify_release.py --tag",
         "environment:\n      name: pypi",
         "id-token: write",
-        "pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b",
+        "pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086",
         "attestations: true",
         "needs: [publish-pypi, release-metadata]",
         "gh release create",

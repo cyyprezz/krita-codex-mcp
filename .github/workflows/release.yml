@@ -89,6 +89,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
           $sdist = Get-ChildItem -LiteralPath dist -Filter *.tar.gz | Select-Object -First 1
+          uvx --from twine==7.0.0 twine check --strict $wheel.FullName $sdist.FullName
           python scripts/verify_distribution.py $wheel.FullName $sdist.FullName
 
           $extract = Join-Path $env:RUNNER_TEMP "krita-codex-release-sdist"
@@ -161,7 +162,7 @@ jobs:
           path: dist
 
       - name: Publish with PyPI Trusted Publishing
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           packages-dir: dist
           print-hash: true

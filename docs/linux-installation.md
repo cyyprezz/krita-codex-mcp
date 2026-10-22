@@ -1,6 +1,6 @@
 # Linux installation
 
-The `0.2.1` package installs the bridge on Linux without a Git checkout.
+The `0.2.2` package installs the bridge on Linux without a Git checkout.
 Windows paths (`%APPDATA%`, `%LOCALAPPDATA%`) are
 replaced by the XDG base directories; a Windows environment keeps its layout unchanged.
 
@@ -43,7 +43,7 @@ prefer another directory.
 
 ```bash
 mkdir -p "$HOME/krita-codex-work"
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
 ```
 
 ## 2. Enable the plugin
@@ -55,8 +55,8 @@ In Krita, open **Settings > Configure Krita > Python Plugin Manager** (French in
 ## 3. Run the preflight
 
 ```bash
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check --offline   # Krita closed
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check             # Krita restarted
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install check --offline   # Krita closed
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install check             # Krita restarted
 ```
 
 Expected result: `compatible` or `limited`, never `incompatible`.
@@ -75,8 +75,8 @@ Alternatively, preview the installer's direct user-wide Codex block, then apply 
 the preview and confirming the prompt:
 
 ```bash
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install codex-config
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install codex-config --apply
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install codex-config
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install codex-config --apply
 ```
 
 The direct block in `~/.codex/config.toml` uses the same version as the installer:
@@ -84,7 +84,7 @@ The direct block in `~/.codex/config.toml` uses the same version as the installe
 ```toml
 [mcp_servers.krita]
 command = "uvx"
-args = ["--from", "krita-codex-mcp==0.2.1", "krita-codex-mcp"]
+args = ["--from", "krita-codex-mcp==0.2.2", "krita-codex-mcp"]
 env_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]
 startup_timeout_sec = 60
 tool_timeout_sec = 210
@@ -122,7 +122,7 @@ For opencode, paste this block into `~/.config/opencode/opencode.jsonc`:
 "mcp": {
   "krita": {
     "type": "local",
-    "command": ["uvx", "--from", "krita-codex-mcp==0.2.1", "krita-codex-mcp"],
+    "command": ["uvx", "--from", "krita-codex-mcp==0.2.2", "krita-codex-mcp"],
     "enabled": true,
     "timeout": 210000
   }
