@@ -9,9 +9,10 @@ import shutil
 import tempfile
 from pathlib import Path
 
+from stdio_surface_smoke import EXPECTED_TOOLS
+
 from krita_codex_mcp import __version__
 from krita_codex_mcp.installer.codex_config import managed_block
-from stdio_surface_smoke import EXPECTED_TOOLS
 
 
 async def response(process: asyncio.subprocess.Process, request: dict) -> dict:
@@ -65,9 +66,8 @@ async def smoke(wheel: Path) -> None:
                 raise RuntimeError(f"codex {arguments} failed: {stderr.decode()}")
             if arguments == ["--version"]:
                 print(stdout.decode().strip())
-            if arguments[:2] == ["mcp", "get"]:
-                if json.loads(stdout).get("name") != "krita":
-                    raise RuntimeError("Codex did not read the installer-generated server entry")
+            if arguments[:2] == ["mcp", "get"] and json.loads(stdout).get("name") != "krita":
+                raise RuntimeError("Codex did not read the installer-generated server entry")
 
         bridge_config = root / "bridge-config.json"
         server_environment = [
