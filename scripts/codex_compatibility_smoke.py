@@ -7,6 +7,7 @@ import os
 import secrets
 import shutil
 import tempfile
+import tomllib
 from pathlib import Path
 
 from stdio_surface_smoke import EXPECTED_TOOLS
@@ -46,7 +47,9 @@ async def smoke(wheel: Path) -> None:
         }
         environment.pop("KRITA_CODEX_CONFIG", None)
         environment["CODEX_HOME"] = str(codex_home)
-        config_path.write_text(managed_block(__version__) + "\n", encoding="utf-8")
+        generated = managed_block(__version__)
+        launcher = tomllib.loads(generated)["mcp_servers"]["krita"]
+        config_path.write_text(generated + "\n", encoding="utf-8")
         for arguments in (
             ["--version"],
             ["mcp", "get", "krita", "--json"],
@@ -70,18 +73,19 @@ async def smoke(wheel: Path) -> None:
                 raise RuntimeError("Codex did not read the installer-generated server entry")
 
         bridge_config = root / "bridge-config.json"
-        server_environment = [
-            "[mcp_servers.krita.env]",
-            "KRITA_CODEX_CONFIG = " + json.dumps(str(bridge_config)),
-        ]
-        if os.name != "nt":
+        server_environment = ["env_vars = " + json.dumps(launcher["env_vars"])]
+        if os.name == "nt":
+            server_environment.extend(
+                [
+                    "[mcp_servers.krita.env]",
+                    "KRITA_CODEX_CONFIG = " + json.dumps(str(bridge_config)),
+                ]
+            )
+        else:
             xdg_config = root / "custom-xdg-config"
             bridge_config = xdg_config / "krita-codex-mcp" / "config.json"
             bridge_config.parent.mkdir(parents=True)
             environment["XDG_CONFIG_HOME"] = str(xdg_config)
-            server_environment = [
-                'env_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]'
-            ]
         bridge_config.write_text(
             json.dumps({"token": secrets.token_urlsafe(32), "allowed_roots": [str(root)]}),
             encoding="utf-8",
@@ -92,8 +96,8 @@ async def smoke(wheel: Path) -> None:
                     "[mcp_servers.krita]",
                     "command = " + json.dumps(uvx),
                     "args = " + json.dumps(["--from", str(wheel.resolve()), "krita-codex-mcp"]),
-                    "startup_timeout_sec = 60",
-                    "tool_timeout_sec = 210",
+                    "startup_timeout_sec = " + str(launcher["startup_timeout_sec"]),
+                    "tool_timeout_sec = " + str(launcher["tool_timeout_sec"]),
                     *server_environment,
                 ]
             )

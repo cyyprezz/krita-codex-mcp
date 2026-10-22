@@ -30,6 +30,14 @@ class CodexConfigTests(unittest.TestCase):
         self.assertNotIn("cwd =", change.preview)
         self.assertFalse(self.path.exists())
 
+    def test_generated_launcher_forwards_custom_xdg_paths(self) -> None:
+        change = plan_codex_config_change(self.path, "1.2.3")
+        server = tomllib.loads(change.updated)["mcp_servers"]["krita"]
+        self.assertEqual(
+            server.get("env_vars"),
+            ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"],
+        )
+
     def test_apply_creates_managed_block_and_updates_it_atomically(self) -> None:
         self.path.parent.mkdir(parents=True)
         previous = '[features]\nexample = true\n'

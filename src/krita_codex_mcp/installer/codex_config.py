@@ -33,6 +33,7 @@ def managed_block(distribution_version: str) -> str:
                 + distribution_version
                 + '", "krita-codex-mcp"]'
             ),
+            'env_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]',
             "startup_timeout_sec = 60",
             "tool_timeout_sec = 210",
             END_MARKER,

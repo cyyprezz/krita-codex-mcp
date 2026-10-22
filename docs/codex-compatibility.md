@@ -33,11 +33,11 @@ supported compatibility formats. The portable root `plugin.json` / `mcp.json` fo
 for new packages; it does not require renaming a working plugin's files. The newer portable MCP
 format has different requirements, including an explicit transport type.
 
-The marketplace bundle still launches the published `krita-codex-mcp==0.2.0` package. That release
-predates the Linux path fixes. Windows release users can use it; Linux users must install and
-launch the current checkout as described in the [Linux guide](linux-installation.md#4-connect-codex).
-The installer's `codex-config` command also generates a published-version launcher, so it is not
-the launcher for unreleased checkout changes.
+Release `0.2.1` includes the Linux/XDG fixes. The marketplace bundle and the installer's
+`codex-config` command launch that exact package on both Windows and Linux and explicitly forward
+custom XDG directories. Keep the installed Krita plugin and server on the same version.
+For unreleased source changes, use the checkout-specific alternative in the
+[Linux guide](linux-installation.md#4-connect-codex).
 
 ## What CI verifies
 
@@ -50,7 +50,9 @@ profile, this checks:
 - Codex starts the built STDIO server and discovers exactly the project's 13 tools.
 
 The Ubuntu run uses a custom `XDG_CONFIG_HOME` passed through `env_vars`, so discovery also proves
-that the server reads the forwarded Linux configuration path.
+that the server reads the forwarded Linux configuration path. It uses the environment and timeout
+settings from the installer's actual generated block, replacing the package source with the built
+wheel while that version is not yet published.
 
 The test uses the app-server discovery endpoint only as a diagnostic client. It does not start a
 model turn, require an API key or change a personal Codex profile. It does not exercise painting,

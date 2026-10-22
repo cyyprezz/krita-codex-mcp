@@ -7,16 +7,16 @@ Model Context Protocol (MCP) server for Windows and Linux.
 
 [PyPI package](https://pypi.org/project/krita-codex-mcp/) ·
 [GitHub releases](https://github.com/cyyprezz/krita-codex-mcp/releases) ·
-[Windows installation guide](docs/windows-installation.md) ·
-[Linux installation guide](docs/linux-installation.md) ·
-[Codex and MCP compatibility](docs/codex-compatibility.md)
+[Windows installation guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/windows-installation.md) ·
+[Linux installation guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/linux-installation.md) ·
+[Codex and MCP compatibility](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/codex-compatibility.md)
 
 A local MCP server that lets Codex inspect and control Krita through a small,
 authenticated bridge. The MCP process uses STDIO. The Krita Python plugin listens only on
 `127.0.0.1`, validates a shared bearer token, and dispatches every Krita API call to Qt's main
 thread.
 
-Windows is the original supported platform; Linux installation from a checkout is experimental.
+Windows is the original supported platform; Linux support is experimental.
 Both platforms use a capability-based runtime compatibility check. Krita 5.3.2.1 on Windows is a
 tested build, not a hard version requirement. The server deliberately
 exposes a small set of cohesive tools instead of a large collection of micro-tools:
@@ -54,12 +54,12 @@ Choose the installation source for your platform:
 
 | Platform | Installation source | Validation |
 |---|---|---|
-| Windows | Published `0.2.0` package or a checkout | Windows CI; original live testing with Krita 5.3.2.1 |
-| Linux | Current Git checkout | Linux CI; contributor live test on Debian 13 / Krita 5.2.9 in limited mode |
+| Windows | PyPI `0.2.1` or a checkout | Windows CI; original live testing with Krita 5.3.2.1 |
+| Linux | PyPI `0.2.1` or a checkout | Linux CI; contributor live test on Debian 13 / Krita 5.2.9 in limited mode |
 
-The published `0.2.0` package and marketplace plugin's `uvx` launcher predate the Linux path fixes.
-Linux users must use the checkout installation and direct Codex configuration below until a new
-package is released. Other Linux distributions and Krita builds require their own live preflight.
+Version `0.2.1` includes the Linux/XDG path and private-configuration fixes. Keep the installer,
+Krita plugin and Codex server on that same exact version; the marketplace launcher also pins it.
+Other Linux distributions and Krita builds require their own live preflight.
 
 A first-time setup has two separate parts: the local bridge must be installed and enabled in Krita,
 then Codex must be connected through either the marketplace plugin or a direct MCP configuration.
@@ -77,7 +77,7 @@ computer's `127.0.0.1` bridge by adding this GitHub repository.
    from PyPI:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.2.0" `
+uvx --from "krita-codex-mcp==0.2.1" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
@@ -88,35 +88,33 @@ uvx --from "krita-codex-mcp==0.2.0" `
 4. Run the same version's live check:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.2.0" krita-codex-install check
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check
 ```
 
 5. Require either `Ready for productive use.` or the explicit limited-mode success message.
 6. Choose exactly one Codex connection method below: the marketplace plugin or the direct MCP
    configuration.
 
-### Linux: current checkout
+### Linux: PyPI package
 
-Close Krita and install from the repository:
+Close Krita, create a narrow allowed directory and install from PyPI:
 
 ```bash
-git clone https://github.com/cyyprezz/krita-codex-mcp.git
-cd krita-codex-mcp
 mkdir -p "$HOME/krita-codex-work"
-uv run --frozen krita-codex-install install --allowed-root "$HOME/krita-codex-work"
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
 ```
 
 Enable **Krita Codex Bridge** in Krita's **Python Plugin Manager**, close and reopen Krita, then run:
 
 ```bash
-uv run --frozen krita-codex-install check
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check
 ```
 
 Accept `compatible` or explicitly reported `limited` mode. Follow the
-[Linux guide's Codex setup](docs/linux-installation.md#4-connect-codex) to launch this same checkout.
+[Linux guide's Codex setup](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/linux-installation.md#4-connect-codex) for either connection method.
 The installer uses XDG directories and keeps its token configuration private. No `sudo` is needed.
 
-### Windows release: install the Codex plugin from GitHub
+### Install the Codex plugin from GitHub
 
 The repository includes a public, local-first Codex plugin. It bundles the guided `krita-control`
 skill and starts the version-pinned PyPI MCP server through `uvx`; Krita and the authenticated bridge
@@ -136,7 +134,7 @@ server. For later repository releases, run `codex plugin marketplace upgrade kri
 
 ### Configure the MCP server directly
 
-For the Windows release, use this alternative only after the Krita
+For either platform, use this alternative only after the Krita
 bridge has passed the live check. Preview the checkout-free, exactly version-pinned `uvx` Codex
 block with `krita-codex-install codex-config`. Apply it only after explicit confirmation, restart
 Codex, verify `krita_state` and `krita_preview`, and only then start normal work.
@@ -145,23 +143,24 @@ Install and update never close Krita. If the authenticated bridge is running, re
 rejected before any installed files are changed and Krita must be closed manually. A busy local
 bridge port also stops the installer before replacement begins.
 
-For a personal installation, use the user-level `C:\Users\<you>\.codex\config.toml`. This is the
+For a personal installation, use the user-level `~/.codex/config.toml` on Linux or
+`C:\Users\<you>\.codex\config.toml` on Windows. This is the
 recommended option because the server is then available to all local Codex tasks and Git
 worktrees. The generated block uses `uvx`, has no checkout `cwd`, and pins the same exact
 distribution version as the installed plugin. The installer only changes that file after showing
 the full preview and receiving explicit confirmation. Unmarked or conflicting Krita entries are
 never overwritten. Never commit personal configuration. See the
-[Windows installation guide](docs/windows-installation.md#4-connect-codex) for details.
+[Windows installation guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/windows-installation.md#4-connect-codex) for details.
 
-For Linux checkout installations, use the checkout-specific configuration in the
-[Linux guide](docs/linux-installation.md#4-connect-codex). The installer's `codex-config` output
-pins the published PyPI version, so it is not the launcher for unreleased checkout changes.
+The generated launcher and marketplace configuration explicitly forward custom XDG directories.
+Codex and Krita must inherit the same values. For unreleased source changes, use the
+checkout-specific alternative in the [Linux guide](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/linux-installation.md#4-connect-codex).
 
 ### Current Codex and MCP compatibility
 
 The compatibility check uses Codex CLI `0.163.0` (released 2026-10-15) against the built wheel and
 checks discovery of all 13 tools without an API key, model request or running Krita. See
-[the compatibility notes](docs/codex-compatibility.md) for its exact scope.
+[the compatibility notes](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/codex-compatibility.md) for its exact scope.
 
 This server intentionally stays on the MCP Python SDK 1.x maintenance line (`mcp<2`). Current Codex
 retains the legacy STDIO handshake used by this SDK. The newer MCP `2026-07-28` protocol and
@@ -219,11 +218,11 @@ Keep `allowed_roots` as narrow as practical, keep ordinary versioned or manual K
 do not treat the bridge timeout as cancellation. The bridge is local-only and binds exactly to
 `127.0.0.1`.
 
-See [Windows installation](docs/windows-installation.md),
-[Linux installation](docs/linux-installation.md), [Codex/MCP compatibility](docs/codex-compatibility.md),
-[tool behavior and limits](docs/tool-reference.md), [security](SECURITY.md), and the
+See [Windows installation](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/windows-installation.md),
+[Linux installation](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/linux-installation.md), [Codex/MCP compatibility](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/codex-compatibility.md),
+[tool behavior and limits](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/tool-reference.md), [security](https://github.com/cyyprezz/krita-codex-mcp/blob/main/SECURITY.md), and the
 [GitHub releases](https://github.com/cyyprezz/krita-codex-mcp/releases).
 
 ## License
 
-Released under the [MIT License](LICENSE). Copyright (c) 2026 Nicklas Desens.
+Released under the [MIT License](https://github.com/cyyprezz/krita-codex-mcp/blob/main/LICENSE). Copyright (c) 2026 Nicklas Desens.
