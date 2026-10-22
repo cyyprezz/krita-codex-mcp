@@ -33,7 +33,7 @@ supported compatibility formats. The portable root `plugin.json` / `mcp.json` fo
 for new packages; it does not require renaming a working plugin's files. The newer portable MCP
 format has different requirements, including an explicit transport type.
 
-Release `0.2.1` includes the Linux/XDG fixes. The marketplace bundle and the installer's
+Release `0.2.2` includes the Linux/XDG fixes. The marketplace bundle and the installer's
 `codex-config` command launch that exact package on both Windows and Linux and explicitly forward
 custom XDG directories. Keep the installed Krita plugin and server on the same version.
 For unreleased source changes, use the checkout-specific alternative in the

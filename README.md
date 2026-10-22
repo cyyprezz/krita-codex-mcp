@@ -54,10 +54,10 @@ Choose the installation source for your platform:
 
 | Platform | Installation source | Validation |
 |---|---|---|
-| Windows | PyPI `0.2.1` or a checkout | Windows CI; original live testing with Krita 5.3.2.1 |
-| Linux | PyPI `0.2.1` or a checkout | Linux CI; contributor live test on Debian 13 / Krita 5.2.9 in limited mode |
+| Windows | PyPI `0.2.2` or a checkout | Windows CI; original live testing with Krita 5.3.2.1 |
+| Linux | PyPI `0.2.2` or a checkout | Linux CI; contributor live test on Debian 13 / Krita 5.2.9 in limited mode |
 
-Version `0.2.1` includes the Linux/XDG path and private-configuration fixes. Keep the installer,
+Version `0.2.2` includes the Linux/XDG path and private-configuration fixes. Keep the installer,
 Krita plugin and Codex server on that same exact version; the marketplace launcher also pins it.
 Other Linux distributions and Krita builds require their own live preflight.
 
@@ -77,7 +77,7 @@ computer's `127.0.0.1` bridge by adding this GitHub repository.
    from PyPI:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.2.1" `
+uvx --from "krita-codex-mcp==0.2.2" `
   krita-codex-install install `
   --allowed-root "C:\Krita Work"
 ```
@@ -88,7 +88,7 @@ uvx --from "krita-codex-mcp==0.2.1" `
 4. Run the same version's live check:
 
 ```powershell
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install check
 ```
 
 5. Require either `Ready for productive use.` or the explicit limited-mode success message.
@@ -101,13 +101,13 @@ Close Krita, create a narrow allowed directory and install from PyPI:
 
 ```bash
 mkdir -p "$HOME/krita-codex-work"
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
 ```
 
 Enable **Krita Codex Bridge** in Krita's **Python Plugin Manager**, close and reopen Krita, then run:
 
 ```bash
-uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check
+uvx --from "krita-codex-mcp==0.2.2" krita-codex-install check
 ```
 
 Accept `compatible` or explicitly reported `limited` mode. Follow the
