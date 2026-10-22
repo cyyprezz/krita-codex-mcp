@@ -1,6 +1,6 @@
 {
   "name": "krita-codex-mcp",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Control a local Krita session from Codex with guided, safety-focused workflows.",
   "author": {
     "name": "Nicklas Desens",

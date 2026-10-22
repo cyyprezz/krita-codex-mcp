@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   build:
-    name: Build and verify / Windows / Python 3.12
-    runs-on: windows-latest
+    name: Build and verify / ${{ matrix.os }} / Python 3.12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out tagged source
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -26,6 +30,8 @@ jobs:
       - name: Require a tagged main commit
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           git fetch origin main --no-tags
           git merge-base --is-ancestor $env:GITHUB_SHA origin/main
           if ($LASTEXITCODE -ne 0) {
@@ -42,6 +48,8 @@ jobs:
       - name: Test, lint, and build tagged source
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           uv sync --locked --all-groups --python 3.12
           $env:PYTHONPATH = "src"
           python scripts/verify_release.py --tag $env:GITHUB_REF_NAME
@@ -52,6 +60,8 @@ jobs:
       - name: Verify distributions and local wheel execution
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
           $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
           $sdist = Get-ChildItem -LiteralPath dist -Filter *.tar.gz | Select-Object -First 1
           python scripts/verify_distribution.py $wheel.FullName $sdist.FullName
@@ -67,7 +77,18 @@ jobs:
           uvx --from $wheel.FullName krita-codex-install --version
           python scripts/stdio_surface_smoke.py $wheel.FullName
 
+      - name: Verify current Codex configuration and MCP discovery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm install --global @openai/codex@0.163.0 --no-audit --no-fund
+          $env:PYTHONPATH = "src"
+          $wheel = Get-ChildItem -LiteralPath dist -Filter *.whl | Select-Object -First 1
+          python scripts/codex_compatibility_smoke.py $wheel.FullName
+
       - name: Store verified release distributions
+        if: runner.os == 'Windows'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: python-distributions
@@ -100,9 +121,54 @@ jobs:
           print-hash: true
           attestations: true
 
+  verify-pypi:
+    name: Verify published PyPI distributions
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download verified release distributions
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: python-distributions
+          path: dist
+
+      - name: Verify public PyPI file hashes
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+          expected = {
+              path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+              for path in Path("dist").iterdir()
+              if path.name.endswith((".whl", ".tar.gz"))
+          }
+          for attempt in range(6):
+              try:
+                  url = f"https://pypi.org/pypi/krita-codex-mcp/{version}/json"
+                  with urllib.request.urlopen(url, timeout=15) as response:
+                      release = json.load(response)
+                  actual = {item["filename"]: item["digests"]["sha256"] for item in release["urls"]}
+                  if len(expected) == 2 and actual == expected:
+                      print(f"PyPI {version}: both published files match the verified distributions")
+                      break
+              except (urllib.error.URLError, TimeoutError):
+                  pass
+              if attempt == 5:
+                  raise SystemExit("Public PyPI files do not match the verified distributions")
+              time.sleep(5)
+          PY
+
   github-release:
     name: Create GitHub release
-    needs: publish-pypi
+    needs: verify-pypi
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -113,12 +179,19 @@ jobs:
           name: python-distributions
           path: dist
 
-      - name: Create release from the published tag
+      - name: Create or complete the release from the published tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
-            --repo "$GITHUB_REPOSITORY" \
-            --verify-tag \
-            --generate-notes \
-            --title "Krita Codex MCP $GITHUB_REF_NAME"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
+              --repo "$GITHUB_REPOSITORY"
+            gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --prerelease=false --latest
+          else
+            gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --generate-notes \
+              --title "Krita Codex MCP $GITHUB_REF_NAME"
+          fi

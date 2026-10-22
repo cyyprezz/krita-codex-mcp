@@ -1,6 +1,7 @@
 # Linux installation
 
-The bridge runs on Linux from a local checkout. Windows paths (`%APPDATA%`, `%LOCALAPPDATA%`) are
+The `0.2.1` package installs the bridge on Linux without a Git checkout.
+Windows paths (`%APPDATA%`, `%LOCALAPPDATA%`) are
 replaced by the XDG base directories; a Windows environment keeps its layout unchanged.
 
 Final layout, with no `XDG_*` variable set:
@@ -35,15 +36,14 @@ to generate a new token, then restart Krita.
 No step needs `sudo`: `pykrita_root` is the Krita plugin folder, unrelated to the root account.
 
 Prerequisites: Krita with Python scripting, `uv` on `PATH`, and one narrow directory for KRA and
-export access. Run every command below from the root of your checkout (the directory that contains
-`pyproject.toml`). The examples use `~/krita-codex-work` as the allowed root: change it if you
+export access. The examples use `~/krita-codex-work` as the allowed root: change it if you
 prefer another directory.
 
 ## 1. Install with Krita closed
 
 ```bash
 mkdir -p "$HOME/krita-codex-work"
-uv run krita-codex-install install --allowed-root "$HOME/krita-codex-work"
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install install --allowed-root "$HOME/krita-codex-work"
 ```
 
 ## 2. Enable the plugin
@@ -55,62 +55,84 @@ In Krita, open **Settings > Configure Krita > Python Plugin Manager** (French in
 ## 3. Run the preflight
 
 ```bash
-uv run krita-codex-install check --offline   # Krita closed
-uv run krita-codex-install check             # Krita restarted
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check --offline   # Krita closed
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install check             # Krita restarted
 ```
 
 Expected result: `compatible` or `limited`, never `incompatible`.
 
 ## 4. Connect Codex
 
-After the live preflight passes, add this block to your user-level `~/.codex/config.toml`.
-Replace `/absolute/path/to/krita-codex-mcp` with the checkout directory containing `pyproject.toml`:
+After the live preflight passes, choose exactly one connection method. The marketplace plugin
+provides the version-pinned server and guided Krita skill:
+
+```bash
+codex plugin marketplace add cyyprezz/krita-codex-mcp
+codex plugin add krita-codex-mcp@krita-codex
+```
+
+Alternatively, preview the installer's direct user-wide Codex block, then apply it after checking
+the preview and confirming the prompt:
+
+```bash
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install codex-config
+uvx --from "krita-codex-mcp==0.2.1" krita-codex-install codex-config --apply
+```
+
+The direct block in `~/.codex/config.toml` uses the same version as the installer:
 
 ```toml
 [mcp_servers.krita]
-command = "uv"
-args = ["run", "--frozen", "--directory", "/absolute/path/to/krita-codex-mcp", "krita-codex-mcp"]
+command = "uvx"
+args = ["--from", "krita-codex-mcp==0.2.1", "krita-codex-mcp"]
 env_vars = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"]
 startup_timeout_sec = 60
 tool_timeout_sec = 210
 ```
 
-Use an absolute path; TOML does not expand `$HOME` or shell variables inside these strings.
 Restart Codex, inspect `codex mcp list` or `/mcp`, then call `krita_state` and `krita_preview` in a
 new task. Codex and Krita must run on the same computer and resolve the same XDG environment.
 Codex filters the environment of MCP subprocesses; `env_vars` explicitly forwards custom XDG
 paths. Launch Codex from an environment containing those same values, or set their absolute
 values in a `[mcp_servers.krita.env]` table if your desktop launcher does not inherit them.
 
-The marketplace plugin and the installer's `codex-config` command currently generate a launcher
-pinned to the published `0.2.0` package. That package predates the XDG fixes. Use the checkout block
-above for Linux and configure Krita only once in Codex.
+For updates, close Krita, run the new version's `krita-codex-install update`, restart Krita and
+repeat the live check. Then update your chosen Codex launcher to that same version. Keep existing
+allowed roots; do not mix policy changes with a software update.
+
+For development, install and check from a checkout with `uv run --frozen krita-codex-install`.
+To launch that same source in Codex, replace only the direct block's command and arguments:
+
+```toml
+command = "uv"
+args = ["run", "--frozen", "--directory", "/absolute/path/to/krita-codex-mcp", "krita-codex-mcp"]
+```
+
+Keep the `env_vars` and timeout settings from the full block. Use an absolute checkout path;
+TOML does not expand `$HOME` or shell variables. The installer's `codex-config` command and the
+marketplace always launch a versioned package, so use this alternative for unreleased source changes.
 
 See [Codex/MCP compatibility](codex-compatibility.md) for the checked client and protocol boundary.
 
 ## 5. Other MCP clients
 
-For opencode, use the checkout rather than PyPI. JSON does not
-expand variables, so this command prints the block for opencode already filled in with your
-checkout path; paste it into `~/.config/opencode/opencode.jsonc`:
+For opencode, paste this block into `~/.config/opencode/opencode.jsonc`:
 
-```bash
-cat <<EOF
+```json
 "mcp": {
   "krita": {
     "type": "local",
-    "command": ["uv", "run", "--directory", "$PWD", "krita-codex-mcp"],
+    "command": ["uvx", "--from", "krita-codex-mcp==0.2.1", "krita-codex-mcp"],
     "enabled": true,
     "timeout": 210000
   }
 }
-EOF
 ```
 
 The 210 s timeout matches the bridge limits (120 s open/save, 180 s export); opencode's default of
 5 s would cut them.
 
-## Tests
+## Tests from a source checkout
 
 ```bash
 uv run --frozen python -m unittest discover -s tests

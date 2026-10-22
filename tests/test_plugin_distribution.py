@@ -5,6 +5,8 @@ import re
 import unittest
 from pathlib import Path
 
+from krita_codex_mcp import __version__
+
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = ROOT / "plugins" / "krita-codex-mcp"
 
@@ -42,6 +44,7 @@ class PluginDistributionTests(unittest.TestCase):
         self.assertEqual(manifest["name"], PLUGIN_ROOT.name)
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
         self.assertRegex(str(manifest["version"]), r"^\d+\.\d+\.\d+$")
+        self.assertEqual(manifest["version"], __version__)
 
         server = mcp_config["mcpServers"]["krita"]
         self.assertEqual(server["command"], "uvx")
@@ -55,6 +58,10 @@ class PluginDistributionTests(unittest.TestCase):
         )
         self.assertEqual(server["startup_timeout_sec"], 60)
         self.assertEqual(server["tool_timeout_sec"], 210)
+        self.assertEqual(
+            server.get("env_vars"),
+            ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"],
+        )
 
     def test_bundled_skill_is_complete(self) -> None:
         skill = (PLUGIN_ROOT / "skills" / "krita-control" / "SKILL.md").read_text(

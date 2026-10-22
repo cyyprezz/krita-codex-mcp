@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.cyyprezz/krita-codex-mcp",
   "title": "Krita Codex MCP",
-  "description": "Control Krita through a secure local MCP server and authenticated Windows bridge.",
+  "description": "Control Krita through a secure local MCP server and authenticated Windows/Linux bridge.",
   "repository": {
     "url": "https://github.com/cyyprezz/krita-codex-mcp",
     "source": "github"
   },
-  "version": "0.2.0",
+  "version": "0.2.1",
   "websiteUrl": "https://github.com/cyyprezz/krita-codex-mcp",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "krita-codex-mcp",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"
