@@ -6,10 +6,12 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from krita_codex_mcp import __version__
 from krita_codex_mcp.installer.codex_config import (
     BEGIN_MARKER,
     END_MARKER,
     apply_codex_config_change,
+    managed_block,
     plan_codex_config_change,
 )
 from krita_codex_mcp.installer.errors import InstallerError
@@ -36,6 +38,13 @@ class CodexConfigTests(unittest.TestCase):
         self.assertEqual(
             server.get("env_vars"),
             ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME"],
+        )
+
+    def test_shipped_example_matches_generated_launcher(self) -> None:
+        example = Path(__file__).resolve().parents[1] / ".codex" / "config.toml.example"
+        self.assertEqual(
+            tomllib.loads(example.read_text(encoding="utf-8")),
+            tomllib.loads(managed_block(__version__)),
         )
 
     def test_apply_creates_managed_block_and_updates_it_atomically(self) -> None:
