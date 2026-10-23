@@ -58,7 +58,7 @@ class InstallScriptContractTests(unittest.TestCase):
         source = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("uv sync --locked --all-groups --python 3.12", source)
+        self.assertIn("uv sync --locked --all-groups --python ${{ matrix.python }}", source)
 
     @unittest.skipUnless(os.name == "nt" and POWERSHELL, "requires Windows PowerShell")
     def test_powershell_scripts_parse(self) -> None:

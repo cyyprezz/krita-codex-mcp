@@ -9,8 +9,7 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import Client, StdioServerParameters
 
 EXPECTED_TOOLS = {
     "krita_state",
@@ -57,16 +56,16 @@ async def smoke(wheel: Path, *, offline: bool) -> None:
             args=arguments,
             env=environment,
         )
-        async with (
-            stdio_client(parameters) as (read_stream, write_stream),
-            ClientSession(read_stream, write_stream) as session,
-        ):
-            await session.initialize()
-            tools = await session.list_tools()
-    names = {tool.name for tool in tools.tools}
-    if names != EXPECTED_TOOLS:
-        raise RuntimeError(f"Unexpected MCP tool surface: {sorted(names)}")
-    print("Local wheel STDIO smoke: 13 tools")
+        for mode in ("auto", "legacy"):
+            async with Client(parameters, mode=mode) as session:
+                tools = await session.list_tools()
+                names = {tool.name for tool in tools.tools}
+                if names != EXPECTED_TOOLS:
+                    raise RuntimeError(f"Unexpected MCP tool surface: {sorted(names)}")
+                expected_version = "2026-07-28" if mode == "auto" else "2025-11-25"
+                if session.protocol_version != expected_version:
+                    raise RuntimeError(f"Unexpected {mode} protocol: {session.protocol_version}")
+                print(f"Local wheel STDIO smoke: 13 tools, {session.protocol_version} ({mode})")
 
 
 def main() -> None:

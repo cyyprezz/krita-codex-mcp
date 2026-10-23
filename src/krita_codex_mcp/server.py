@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import sys
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from krita_codex_protocol import BridgeConfig, ConfigError
 
+from . import __version__
 from .bridge_client import BridgeClient
 from .server_asset_tools import register_asset_tools
 from .server_core_tools import register_core_tools
@@ -22,9 +23,9 @@ SERVER_INSTRUCTIONS = (
 )
 
 
-def build_server(config: BridgeConfig, client: BridgeClient | None = None) -> FastMCP:
+def build_server(config: BridgeConfig, client: BridgeClient | None = None) -> MCPServer:
     service = KritaService(config, client or BridgeClient(config))
-    mcp = FastMCP("krita-codex-mcp", instructions=SERVER_INSTRUCTIONS)
+    mcp = MCPServer("krita-codex-mcp", version=__version__, instructions=SERVER_INSTRUCTIONS)
     register_core_tools(mcp, service)
     register_creation_tools(mcp, service)
     register_asset_tools(mcp, service)
