@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import ImageContent, TextContent
+from mcp.server import MCPServer
+from mcp_types import ImageContent, TextContent
 from pydantic import Field
 
 from .bridge_client import BridgeCallError
@@ -12,13 +12,13 @@ from .server_common import image_result, tool_call, tool_error
 from .validation import InputError
 
 
-def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
-    @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
+def register_core_tools(mcp: MCPServer, service: KritaService) -> None:
+    @mcp.tool(annotations={"read_only_hint": True, "open_world_hint": False})
     async def krita_state(document_id: str | None = None) -> dict[str, Any]:
         """Read document/layers/painting state plus the running Krita compatibility report."""
         return await tool_call(lambda: service.state(document_id=document_id))
 
-    @mcp.tool(annotations={"readOnlyHint": True, "openWorldHint": False})
+    @mcp.tool(annotations={"read_only_hint": True, "open_world_hint": False})
     async def krita_preview(
         max_width: Annotated[int, Field(ge=64, le=4096)] = 1024,
         max_height: Annotated[int, Field(ge=64, le=4096)] = 1024,
@@ -46,7 +46,7 @@ def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
             raise tool_error(exc) from exc
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_canvas(
         action: Literal[
@@ -104,7 +104,7 @@ def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_document(
         action: Literal[
@@ -139,7 +139,7 @@ def register_core_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_history(
         action: Literal["status", "undo", "redo"] = "status",

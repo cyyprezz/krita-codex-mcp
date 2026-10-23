@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from typing import Any
 
-from mcp.types import ImageContent
+from mcp_types import ImageContent
 
 from krita_codex_mcp.server import build_server
 from krita_codex_protocol import BridgeConfig
@@ -53,12 +53,13 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_preview_returns_direct_image_content(self) -> None:
         result = await self.server.call_tool("krita_preview", {"max_width": 64, "max_height": 64})
-        content, structured = result
+        content = result.content
+        self.assertFalse(result.is_error)
         self.assertEqual(len(content), 2)
         self.assertIsInstance(content[1], ImageContent)
-        self.assertEqual(content[1].mimeType, "image/png")
+        self.assertEqual(content[1].mime_type, "image/png")
         self.assertEqual(content[1].data, PNG_BASE64)
-        self.assertEqual(structured["result"][1]["type"], "image")
+        self.assertIsNone(result.structured_content)
 
     async def test_asset_export_returns_direct_image_content(self) -> None:
         result = await self.server.call_tool(
@@ -71,30 +72,31 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "preview_max_height": 64,
             },
         )
-        content, structured = result
+        content = result.content
+        self.assertFalse(result.is_error)
         self.assertEqual(len(content), 2)
         self.assertIsInstance(content[1], ImageContent)
-        self.assertEqual(content[1].mimeType, "image/png")
-        self.assertEqual(structured["result"][1]["type"], "image")
+        self.assertEqual(content[1].mime_type, "image/png")
+        self.assertIsNone(result.structured_content)
 
     async def test_asset_schema_requires_layer_and_output_path(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}
-        required = tools["krita_asset"].inputSchema["required"]
+        required = tools["krita_asset"].input_schema["required"]
         self.assertIn("layer_id", required)
         self.assertIn("output_path", required)
-        actions = tools["krita_asset"].inputSchema["properties"]["action"]["enum"]
+        actions = tools["krita_asset"].input_schema["properties"]["action"]["enum"]
         self.assertEqual(
             actions,
             ["export_layer", "export_animation", "export_tileset", "export_regions"],
         )
-        properties = tools["krita_asset"].inputSchema["properties"]
+        properties = tools["krita_asset"].input_schema["properties"]
         for field in ("tile_width", "tile_height", "grid_columns", "grid_rows", "regions"):
             self.assertIn(field, properties)
 
     async def test_canvas_and_edit_schemas_expose_bounded_actions(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}
         self.assertEqual(
-            tools["krita_canvas"].inputSchema["properties"]["action"]["enum"],
+            tools["krita_canvas"].input_schema["properties"]["action"]["enum"],
             [
                 "read",
                 "sample_color",
@@ -107,7 +109,7 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         self.assertEqual(
-            tools["krita_edit"].inputSchema["properties"]["action"]["enum"],
+            tools["krita_edit"].input_schema["properties"]["action"]["enum"],
             [
                 "selection_status",
                 "select_rect",
@@ -128,14 +130,14 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "clear",
             ],
         )
-        self.assertIn("document_id", tools["krita_canvas"].inputSchema["properties"])
-        self.assertIn("document_id", tools["krita_edit"].inputSchema["properties"])
+        self.assertIn("document_id", tools["krita_canvas"].input_schema["properties"])
+        self.assertIn("document_id", tools["krita_edit"].input_schema["properties"])
 
     async def test_layer_schema_exposes_persistent_asset_operations(self) -> None:
         tools = await self.server.list_tools()
         layer_tool = next(tool for tool in tools if tool.name == "krita_layers")
         self.assertEqual(
-            layer_tool.inputSchema["properties"]["action"]["enum"],
+            layer_tool.input_schema["properties"]["action"]["enum"],
             [
                 "read",
                 "create",
@@ -155,20 +157,20 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
             ],
         )
         for field in ("locked", "alpha_locked", "inherit_alpha", "blending_mode"):
-            self.assertIn(field, layer_tool.inputSchema["properties"])
+            self.assertIn(field, layer_tool.input_schema["properties"])
         self.assertEqual(
-            layer_tool.inputSchema["properties"]["transform_mode"]["enum"],
+            layer_tool.input_schema["properties"]["transform_mode"]["enum"],
             ["mask", "direct"],
         )
         self.assertEqual(
-            layer_tool.inputSchema["properties"]["response_mode"]["enum"],
+            layer_tool.input_schema["properties"]["response_mode"]["enum"],
             ["compact", "full"],
         )
-        self.assertIn("checkpoint_reopen", layer_tool.inputSchema["properties"])
+        self.assertIn("checkpoint_reopen", layer_tool.input_schema["properties"])
 
     async def test_document_targeting_and_checkpoint_are_exposed(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}
-        document_actions = tools["krita_document"].inputSchema["properties"]["action"]["enum"]
+        document_actions = tools["krita_document"].input_schema["properties"]["action"]["enum"]
         self.assertIn("save", document_actions)
         self.assertIn("compatibility", document_actions)
         for name in (
@@ -185,16 +187,16 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
             "krita_asset",
             "krita_save_export",
         ):
-            self.assertIn("document_id", tools[name].inputSchema["properties"], name)
+            self.assertIn("document_id", tools[name].input_schema["properties"], name)
 
     async def test_draw_and_color_schemas_are_cohesive_and_bounded(self) -> None:
         tools = {tool.name: tool for tool in await self.server.list_tools()}
         self.assertEqual(
-            tools["krita_draw"].inputSchema["properties"]["shape"]["enum"],
+            tools["krita_draw"].input_schema["properties"]["shape"]["enum"],
             ["line", "path", "rectangle", "ellipse", "polygon"],
         )
         self.assertEqual(
-            tools["krita_color"].inputSchema["properties"]["action"]["enum"],
+            tools["krita_color"].input_schema["properties"]["action"]["enum"],
             [
                 "read",
                 "list_palettes",
@@ -205,8 +207,8 @@ class ServerSurfaceTests(unittest.IsolatedAsyncioTestCase):
                 "adjust",
             ],
         )
-        self.assertIn("entries", tools["krita_color"].inputSchema["properties"])
-        self.assertIn("settings", tools["krita_color"].inputSchema["properties"])
+        self.assertIn("entries", tools["krita_color"].input_schema["properties"])
+        self.assertIn("settings", tools["krita_color"].input_schema["properties"])
 
 
 if __name__ == "__main__":

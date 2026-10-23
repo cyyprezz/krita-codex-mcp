@@ -1,6 +1,7 @@
 # Codex and MCP compatibility
 
-Checked against official documentation and Codex CLI `0.163.0` on 2026-10-22.
+Compatibility baseline: Codex CLI `0.163.0`, Claude Code `2.1.308`, MCP Python SDK `2.3.0`.
+Updated on 2026-10-23; CI tests the candidate wheel rather than substituting the PyPI release.
 
 ## Supported connection
 
@@ -8,15 +9,21 @@ Krita Codex MCP is a local STDIO MCP server. Codex launches it as a child proces
 talks to the authenticated Krita plugin over loopback. The loopback bridge is an internal JSON
 API, not a remote MCP endpoint. Codex and Krita must run on the same computer.
 
-The repository uses the MCP Python SDK 1.x maintenance line (`mcp>=1.12,<2`, locked to `1.28.1`).
-This intentionally retains its `FastMCP` API and legacy initialization handshake. Codex CLI
-`0.163.0` retains that handshake for STDIO servers without the modern-protocol opt-in. No modern
-protocol opt-in is needed in the provided configurations.
+The source checkout uses MCP Python SDK 2 (`mcp>=2.3,<3`, locked to `2.3.0`) and its `MCPServer`
+API. The server accepts both modern `2026-07-28` discovery and legacy `initialize` over STDIO.
+Codex CLI `0.163.0` uses the legacy handshake for the provided configurations; no modern-protocol
+opt-in is required. Async tool handlers, authenticated loopback requests and Krita's Qt main-thread
+dispatcher retain their existing ownership. There is no new network MCP listener.
 
-The newer MCP `2026-07-28` specification changes initialization, discovery and request metadata.
-It also defines a legacy fallback for clients supporting both protocol eras. This repository does
-not claim to implement the full newer protocol. SDK 2.x is a separate migration, not an unbounded
-dependency update: the SDK's own maintenance documentation recommends `mcp<2` for existing v1 apps.
+The migration updates SDK types and result objects, keeps PNGs as direct image content alongside
+text metadata, and uses explicit `ToolError` for expected failures so error codes, details and
+retryability remain visible. Image tools no longer duplicate image blocks in an SDK-generated
+`structuredContent.result` wrapper; their direct `content` blocks remain available in both
+protocols. The repository does not claim every optional MCP feature or model-driven client flow.
+
+**Unreleased source change:** PyPI `0.2.2` still uses SDK 1 (`mcp<2`). Installation examples and
+marketplace pins continue to select that published release. To test SDK 2 before a new release,
+run from a checkout or build a local wheel. Keep the Krita plugin and MCP server versions aligned.
 
 Codex continues to accept `[mcp_servers.krita]`, STDIO `command`/`args`, `startup_timeout_sec` and
 `tool_timeout_sec`. Its removal of `codex mcp-server` affects hosting Codex itself as an MCP server;
@@ -59,6 +66,22 @@ model turn, require an API key or change a personal Codex profile. It does not e
 GUI plugin installation or a live Krita process. Run the installer's live preflight on the actual
 Krita build before productive use.
 
+`scripts/stdio_surface_smoke.py` launches the built wheel twice through the real SDK client:
+automatic modern discovery must negotiate `2026-07-28`, and explicit legacy initialization must
+negotiate `2025-11-25`. Both must expose exactly 13 tools.
+
+`tests/test_stdio_contract.py` also sends JSON-RPC directly to the real server process. Both wire
+formats cover tool schemas and approval annotations, preview/asset PNG bytes and MIME types,
+invalid input and path escapes before bridge dispatch, and actionable busy/timeout errors.
+Concurrent requests must retain distinct bridge request IDs and correctly correlated results.
+Cancelling an MCP request must leave subsequent requests usable; it cannot undo an operation
+already dispatched to Krita. Only the external Krita endpoint is substituted in these tests.
+The CI matrix covers Python 3.12 on Windows/Ubuntu and the minimum supported Python 3.11 on Ubuntu.
+
+Windows/Ubuntu CI also runs the real Claude Code CLI against the candidate wheel with an isolated
+profile and a loopback model stub; see [Claude verification and limits](claude-installation.md#verification-and-limits).
+Claude Desktop GUI rendering and live client-to-Krita operations remain manual checks.
+
 ## Official references
 
 - [Codex MCP setup and configuration](https://learn.chatgpt.com/docs/extend/mcp)
@@ -66,6 +89,7 @@ Krita build before productive use.
 - [Plugin packaging and compatibility formats](https://developers.openai.com/plugins/build/plugins)
 - [MCP 2026-07-28 changes](https://modelcontextprotocol.io/specification/2026-07-28/changelog)
 - [STDIO compatibility](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio#backward-compatibility)
-- [Python SDK v1 maintenance documentation](https://py.sdk.modelcontextprotocol.io/v1/)
+- [Python SDK 2 changes](https://py.sdk.modelcontextprotocol.io/whats-new/)
+- [Python SDK migration guide](https://py.sdk.modelcontextprotocol.io/migration/)
 - [Codex 0.163.0 protocol selection](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/rmcp-client/src/protocol_mode.rs)
 - [Codex 0.163.0 MCP environment filtering](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/rmcp-client/src/utils.rs)

@@ -167,11 +167,12 @@ The compatibility check uses Codex CLI `0.163.0` (released 2026-10-15) against t
 checks discovery of all 13 tools without an API key, model request or running Krita. See
 [the compatibility notes](https://github.com/cyyprezz/krita-codex-mcp/blob/main/docs/codex-compatibility.md) for its exact scope.
 
-This server intentionally stays on the MCP Python SDK 1.x maintenance line (`mcp<2`). Current Codex
-retains the legacy STDIO handshake used by this SDK. The newer MCP `2026-07-28` protocol and
-portable plugin format do not by themselves require replacing this working local integration.
-The existing Codex plugin manifest remains a supported compatibility format; full support for
-newer MCP protocol features would be a separate, tested SDK migration.
+The source checkout uses MCP Python SDK 2 (`mcp>=2.3,<3`, locked to `2.3.0`). It supports modern
+MCP `2026-07-28` discovery and the legacy STDIO handshake used by the provided Codex configuration.
+The local architecture and 13 tools stay the same. The existing Codex plugin manifest remains a
+supported compatibility format. SDK 2 does not imply support for every optional protocol feature.
+This migration is unreleased: the PyPI `0.2.2` commands above still install the SDK 1 release.
+Use a checkout to try the migration until a new version is published.
 
 The preflight checks local configuration, the complete installed hash manifest, wheel/plugin/
 protocol versions, loopback port, authentication and the running Krita capability profile. The

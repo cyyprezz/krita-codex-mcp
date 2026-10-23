@@ -6,17 +6,13 @@ import base64
 import json
 from pathlib import Path
 
-from mcp import ClientSession, StdioServerParameters, types
-from mcp.client.stdio import stdio_client
+import mcp_types as types
+from mcp import Client, StdioServerParameters
 
 
 async def run(executable: Path, repo_root: Path) -> dict[str, object]:
     parameters = StdioServerParameters(command=str(executable), cwd=repo_root)
-    async with (
-        stdio_client(parameters) as (read_stream, write_stream),
-        ClientSession(read_stream, write_stream) as session,
-    ):
-        await session.initialize()
+    async with Client(parameters) as session:
         listed = await session.list_tools()
         names = [tool.name for tool in listed.tools]
         expected = {
@@ -37,9 +33,9 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
         if set(names) != expected:
             raise RuntimeError(f"Unexpected MCP tool surface: {names}")
         asset_tool = next(tool for tool in listed.tools if tool.name == "krita_asset")
-        if "output_path" not in asset_tool.inputSchema.get("required", []):
+        if "output_path" not in asset_tool.input_schema.get("required", []):
             raise RuntimeError("krita_asset does not require its output path")
-        asset_actions = asset_tool.inputSchema["properties"]["action"].get("enum", [])
+        asset_actions = asset_tool.input_schema["properties"]["action"].get("enum", [])
         if asset_actions != [
             "export_layer",
             "export_animation",
@@ -53,7 +49,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
         creation_smoke = None
         try:
             state = await session.call_tool("krita_state", {})
-            if state.isError:
+            if state.is_error:
                 created = await session.call_tool(
                     "krita_document",
                     {
@@ -63,14 +59,14 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "name": "Codex MCP Smoke Test",
                     },
                 )
-                if created.isError:
+                if created.is_error:
                     raise RuntimeError("krita_document could not create the smoke-test document")
                 created_payload = _structured_payload(created)
                 created_document_id = created_payload.get("affected_document_id")
                 if not isinstance(created_document_id, str):
                     raise RuntimeError("krita_document returned no affected document ID")
                 state = await session.call_tool("krita_state", {})
-            if state.isError:
+            if state.is_error:
                 raise RuntimeError("krita_state returned an MCP tool error")
 
             if created_document_id is not None:
@@ -88,7 +84,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                     },
                 )
                 layer_id = _structured_payload(layer).get("affected_layer_id")
-                if layer.isError or not isinstance(layer_id, str):
+                if layer.is_error or not isinstance(layer_id, str):
                     raise RuntimeError("krita_layers could not create the asset-smoke layer")
                 hidden = await session.call_tool(
                     "krita_layers",
@@ -99,7 +95,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "visible": False,
                     },
                 )
-                if hidden.isError:
+                if hidden.is_error:
                     raise RuntimeError("krita_layers could not hide the smoke background")
                 selected = await session.call_tool(
                     "krita_edit",
@@ -121,7 +117,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "color": "#7E57C2FF",
                     },
                 )
-                if selected.isError or filled.isError:
+                if selected.is_error or filled.is_error:
                     raise RuntimeError("krita_edit could not prepare the asset-smoke tile")
                 await session.call_tool(
                     "krita_edit",
@@ -151,7 +147,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "entries": [{"name": "Accent", "color": "#42D6C6FF"}],
                     },
                 )
-                if drawn.isError or palette.isError:
+                if drawn.is_error or palette.is_error:
                     raise RuntimeError("krita_draw or krita_color failed through STDIO MCP")
                 creation_smoke = {
                     "shape": _structured_payload(drawn).get("shape"),
@@ -174,13 +170,13 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "pixels_per_unit": 32,
                     },
                 )
-                if exported.isError:
+                if exported.is_error:
                     raise RuntimeError("krita_asset could not export the smoke-test tileset")
                 asset_images = [
                     item for item in exported.content if isinstance(item, types.ImageContent)
                 ]
                 asset_metadata = _text_payload(exported)
-                if len(asset_images) != 1 or asset_images[0].mimeType != "image/png":
+                if len(asset_images) != 1 or asset_images[0].mime_type != "image/png":
                     raise RuntimeError("krita_asset returned no direct PNG ImageContent")
                 if asset_metadata.get("region_count") != 1:
                     raise RuntimeError("krita_asset skip_empty did not retain exactly one tile")
@@ -190,18 +186,18 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                 asset_smoke = {
                     "action": asset_metadata.get("action"),
                     "region_count": asset_metadata.get("region_count"),
-                    "image_mime_type": asset_images[0].mimeType,
+                    "image_mime_type": asset_images[0].mime_type,
                     "manifest_path": str(manifest_path),
                 }
 
             preview = await session.call_tool(
                 "krita_preview", {"max_width": 256, "max_height": 256}
             )
-            if preview.isError:
+            if preview.is_error:
                 raise RuntimeError("krita_preview returned an MCP tool error")
             images = [item for item in preview.content if isinstance(item, types.ImageContent)]
             texts = [item for item in preview.content if isinstance(item, types.TextContent)]
-            if len(images) != 1 or images[0].mimeType != "image/png":
+            if len(images) != 1 or images[0].mime_type != "image/png":
                 raise RuntimeError("krita_preview did not return exactly one PNG ImageContent")
             image_bytes = base64.b64decode(images[0].data, validate=True)
             if not image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -224,7 +220,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                 "created_smoke_document": created_document_id is not None,
                 "state_content_types": [type(item).__name__ for item in state.content],
                 "preview_content_types": [type(item).__name__ for item in preview.content],
-                "preview_mime_type": images[0].mimeType,
+                "preview_mime_type": images[0].mime_type,
                 "preview_bytes": len(image_bytes),
                 "preview_size": [
                     preview_metadata.get("width"),
@@ -247,7 +243,7 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
                         "discard_changes": True,
                     },
                 )
-                if closed.isError:
+                if closed.is_error:
                     raise RuntimeError("Could not close the MCP smoke-test document")
                 closed_payload = _structured_payload(closed)
                 if (
@@ -258,8 +254,8 @@ async def run(executable: Path, repo_root: Path) -> dict[str, object]:
 
 
 def _structured_payload(result) -> dict[str, object]:
-    if isinstance(result.structuredContent, dict):
-        return result.structuredContent
+    if isinstance(result.structured_content, dict):
+        return result.structured_content
     for item in result.content:
         if isinstance(item, types.TextContent):
             raw = json.loads(item.text)

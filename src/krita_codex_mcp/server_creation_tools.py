@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from pydantic import Field
 
 from .core_service import KritaService
 from .server_common import tool_call
 
 
-def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
+def register_creation_tools(mcp: MCPServer, service: KritaService) -> None:
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_edit(
         action: Literal[
@@ -60,7 +60,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_layers(
         action: Literal[
@@ -144,7 +144,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": False, "open_world_hint": False}
     )
     async def krita_brush(
         action: Literal["read", "list_presets", "set"] = "read",
@@ -179,7 +179,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": False, "open_world_hint": False}
     )
     async def krita_paint_path(
         points: list[dict[str, Any]],
@@ -200,7 +200,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": False, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": False, "open_world_hint": False}
     )
     async def krita_draw(
         shape: Literal["line", "path", "rectangle", "ellipse", "polygon"],
@@ -243,7 +243,7 @@ def register_creation_tools(mcp: FastMCP, service: KritaService) -> None:
         )
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_color(
         action: Literal[

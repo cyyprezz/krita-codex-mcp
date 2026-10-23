@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import ImageContent, TextContent
+from mcp.server import MCPServer
+from mcp_types import ImageContent, TextContent
 from pydantic import Field
 
 from .bridge_client import BridgeCallError
@@ -12,9 +12,9 @@ from .server_common import image_result, tool_call, tool_error
 from .validation import InputError
 
 
-def register_asset_tools(mcp: FastMCP, service: KritaService) -> None:
+def register_asset_tools(mcp: MCPServer, service: KritaService) -> None:
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_asset(
         layer_id: str,
@@ -87,7 +87,7 @@ def register_asset_tools(mcp: FastMCP, service: KritaService) -> None:
             raise tool_error(exc) from exc
 
     @mcp.tool(
-        annotations={"readOnlyHint": False, "destructiveHint": True, "openWorldHint": False}
+        annotations={"read_only_hint": False, "destructive_hint": True, "open_world_hint": False}
     )
     async def krita_save_export(
         kra_path: str | None = None,

@@ -4,7 +4,8 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from mcp.types import ImageContent, TextContent
+from mcp.server.mcpserver.exceptions import ToolError
+from mcp_types import ImageContent, TextContent
 
 from .bridge_client import BridgeCallError
 from .validation import InputError
@@ -20,11 +21,11 @@ async def tool_call(function: Callable[[], Awaitable[dict[str, Any]]]) -> dict[s
 def image_result(metadata: dict[str, Any], png_base64: str) -> list[TextContent | ImageContent]:
     return [
         TextContent(type="text", text=json.dumps(metadata, ensure_ascii=False)),
-        ImageContent(type="image", data=png_base64, mimeType="image/png"),
+        ImageContent(type="image", data=png_base64, mime_type="image/png"),
     ]
 
 
-def tool_error(exc: InputError | BridgeCallError) -> RuntimeError:
+def tool_error(exc: InputError | BridgeCallError) -> ToolError:
     if isinstance(exc, BridgeCallError):
         payload = {
             "code": exc.code,
@@ -34,4 +35,4 @@ def tool_error(exc: InputError | BridgeCallError) -> RuntimeError:
         }
     else:
         payload = {"code": "INVALID_ARGUMENT", "message": str(exc), "retryable": False}
-    return RuntimeError(json.dumps(payload, ensure_ascii=False))
+    return ToolError(json.dumps(payload, ensure_ascii=False))

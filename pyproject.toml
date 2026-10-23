@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Nicklas Desens" }]
 dependencies = [
-  "mcp>=1.12,<2",
+  "mcp>=2.3,<3",
 ]
 
 [project.urls]
