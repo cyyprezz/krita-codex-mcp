@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from contextlib import closing
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -44,6 +45,7 @@ class _Bridge:
         self.calls: list[dict[str, Any]] = []
         self.error: dict[str, Any] | None = None
         self.slow_started = threading.Event()
+        self.slow_finished = threading.Event()
         self.release_slow = threading.Event()
         bridge = self
 
@@ -79,6 +81,8 @@ class _Bridge:
                 self.send_header("Content-Length", str(len(encoded)))
                 self.end_headers()
                 self.wfile.write(encoded)
+                if request["arguments"].get("document_id") == "slow":
+                    bridge.slow_finished.set()
 
         self.http = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.thread = threading.Thread(target=self.http.serve_forever, daemon=True)
@@ -152,13 +156,23 @@ class _StdioServer:
         return self.next_id
 
     def receive(self, request_id: int) -> dict[str, Any]:
+        message = self.poll(request_id, timeout=20)
+        if message is None:
+            raise AssertionError("MCP server did not respond: " + "".join(self.errors))
+        return message
+
+    def poll(self, request_id: int, *, timeout: float) -> dict[str, Any] | None:
         if request_id in self.pending:
             return self.pending.pop(request_id)
+        deadline = time.monotonic() + timeout
         while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
             try:
-                message = self.messages.get(timeout=20)
-            except queue.Empty as exc:
-                raise AssertionError("MCP server did not respond: " + "".join(self.errors)) from exc
+                message = self.messages.get(timeout=remaining)
+            except queue.Empty:
+                return None
             if message.get("id") == request_id:
                 return message
             if isinstance(message.get("id"), int):
@@ -317,76 +331,90 @@ class StdioContractTests(unittest.TestCase):
                     self.assertEqual(json.loads(text[text.index("{") :]), error)
 
     def test_concurrent_calls_keep_request_ids_and_results_separate(self) -> None:
-        with closing(_StdioServer(self.root, self.bridge.port)) as server:
-            server.connect()
-            slow_id = server.start_request(
-                "tools/call",
-                {
-                    "name": "krita_state",
-                    "arguments": {"document_id": "slow"},
-                },
-            )
-            self.assertTrue(self.bridge.slow_started.wait(timeout=10))
-            try:
-                fast = server.request(
-                    "tools/call",
-                    {
-                        "name": "krita_state",
-                        "arguments": {"document_id": "fast"},
-                    },
-                )
-                self.assertFalse(fast["result"].get("isError"), fast)
-                self.assertEqual(fast["result"]["structuredContent"]["document_id"], "fast")
-            finally:
-                self.bridge.release_slow.set()
-            slow = server.receive(slow_id)
-            self.assertEqual(slow["result"]["structuredContent"]["document_id"], "slow")
-            ids = [call["request"]["request_id"] for call in self.bridge.calls]
-            self.assertEqual(len(set(ids)), 2)
-
-    def test_cancelled_call_does_not_break_following_requests(self) -> None:
         for modern in (True, False):
+            self.bridge.calls.clear()
             self.bridge.slow_started.clear()
+            self.bridge.slow_finished.clear()
             self.bridge.release_slow.clear()
             with (
                 self.subTest(modern=modern),
                 closing(_StdioServer(self.root, self.bridge.port, modern=modern)) as server,
             ):
                 server.connect()
-                cancelled_id = server.start_request(
+                slow_id = server.start_request(
                     "tools/call",
-                    {
-                        "name": "krita_state",
-                        "arguments": {"document_id": "slow"},
-                    },
+                    {"name": "krita_state", "arguments": {"document_id": "slow"}},
                 )
                 self.assertTrue(self.bridge.slow_started.wait(timeout=10))
                 try:
-                    params: dict[str, Any] = {"requestId": cancelled_id, "reason": "Test cancelled"}
-                    if modern:
-                        params["_meta"] = {
-                            "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
-                            "io.modelcontextprotocol/clientCapabilities": {},
-                        }
-                    server.send(
-                        {"jsonrpc": "2.0", "method": "notifications/cancelled", "params": params}
+                    fast = server.request(
+                        "tools/call", {"name": "krita_state", "arguments": {"document_id": "fast"}}
                     )
-                    response = server.request(
-                        "tools/call",
-                        {
-                            "name": "krita_state",
-                            "arguments": {"document_id": "after-cancel"},
-                        },
-                    )
-                    result = response["result"]
-                    self.assertFalse(result.get("isError"), result)
-                    self.assertEqual(result["structuredContent"]["document_id"], "after-cancel")
+                    self.assertFalse(self.bridge.slow_finished.is_set(), "Calls were serialized")
+                    self.assertFalse(fast["result"].get("isError"), fast)
+                    self.assertEqual(fast["result"]["structuredContent"]["document_id"], "fast")
                 finally:
-                    # Cancelling MCP cannot undo an operation already dispatched to Krita.
                     self.bridge.release_slow.set()
-                tools = server.request("tools/list", {})["result"]["tools"]
-                self.assertEqual({tool["name"] for tool in tools}, TOOL_NAMES)
-                self.assertNotIn(cancelled_id, server.pending)
+                slow = server.receive(slow_id)
+                self.assertEqual(slow["result"]["structuredContent"]["document_id"], "slow")
+                ids = [call["request"]["request_id"] for call in self.bridge.calls]
+                self.assertEqual(len(set(ids)), 2)
+
+    def test_cancelled_call_does_not_break_following_requests(self) -> None:
+        for modern in (True, False):
+            with (
+                self.subTest(modern=modern),
+                closing(_StdioServer(self.root, self.bridge.port, modern=modern)) as server,
+            ):
+                server.connect()
+                for cancel in (False, True):
+                    self.bridge.slow_started.clear()
+                    self.bridge.slow_finished.clear()
+                    self.bridge.release_slow.clear()
+                    slow_id = server.start_request(
+                        "tools/call",
+                        {"name": "krita_state", "arguments": {"document_id": "slow"}},
+                    )
+                    self.assertTrue(self.bridge.slow_started.wait(timeout=10))
+                    try:
+                        if cancel:
+                            params: dict[str, Any] = {
+                                "requestId": slow_id,
+                                "reason": "Test cancelled",
+                            }
+                            if modern:
+                                params["_meta"] = {
+                                    "io.modelcontextprotocol/protocolVersion": MODERN_VERSION,
+                                    "io.modelcontextprotocol/clientCapabilities": {},
+                                }
+                            server.send(
+                                {
+                                    "jsonrpc": "2.0",
+                                    "method": "notifications/cancelled",
+                                    "params": params,
+                                }
+                            )
+                        response = server.request(
+                            "tools/call",
+                            {
+                                "name": "krita_state",
+                                "arguments": {"document_id": "after-cancel"},
+                            },
+                        )
+                        result = response["result"]
+                        self.assertFalse(result.get("isError"), result)
+                        self.assertEqual(result["structuredContent"]["document_id"], "after-cancel")
+                    finally:
+                        # Cancelling MCP cannot undo an operation already dispatched to Krita.
+                        self.bridge.release_slow.set()
+                    self.assertTrue(self.bridge.slow_finished.wait(timeout=10))
+                    if cancel:
+                        self.assertIsNone(server.poll(slow_id, timeout=1), "Cancelled call replied")
+                    else:
+                        control = server.receive(slow_id)["result"]["structuredContent"]
+                        self.assertEqual(control["document_id"], "slow")
+                    tools = server.request("tools/list", {})["result"]["tools"]
+                    self.assertEqual({tool["name"] for tool in tools}, TOOL_NAMES)
 
 
 if __name__ == "__main__":
