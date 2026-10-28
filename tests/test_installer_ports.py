@@ -117,6 +117,34 @@ class InstallerPortReservationTests(unittest.TestCase):
             self._assert_cannot_bind([port])
         self._assert_can_bind(port)
 
+    @unittest.skipIf(os.name == "nt", "TIME_WAIT reuse is the POSIX rule")
+    def test_reservation_ignores_time_wait_left_by_a_closed_bridge(self) -> None:
+        # The bridge closes accepted connections itself, so their TIME_WAIT
+        # entries sit on the bridge port after Krita exits.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            server.bind(("127.0.0.1", 0))
+            server.listen(1)
+            port = server.getsockname()[1]
+            client = socket.create_connection(("127.0.0.1", port))
+            accepted, _ = server.accept()
+            accepted.close()
+            client.close()
+        with BridgePortReservation([port]):
+            self._assert_cannot_bind([port])
+
+    @unittest.skipIf(os.name == "nt", "SO_REUSEADDR has another meaning on Windows")
+    def test_reuseaddr_bind_fails_while_reservation_is_held(self) -> None:
+        # Qt sets SO_REUSEADDR on its listening sockets on POSIX.
+        port = _unused_port()
+        with (
+            BridgePortReservation([port]),
+            socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate,
+            self.assertRaises(OSError),
+        ):
+            candidate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            candidate.bind(("127.0.0.1", port))
+
     def test_reservation_is_released_after_installer_success_and_error(self) -> None:
         success_port = _unused_port()
         InstallationManager(self.paths).install(
