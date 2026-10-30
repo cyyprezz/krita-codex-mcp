@@ -145,6 +145,30 @@ class InstallerPortReservationTests(unittest.TestCase):
             candidate.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             candidate.bind(("127.0.0.1", port))
 
+    @unittest.skipIf(os.name == "nt", "SO_REUSEADDR has another meaning on Windows")
+    def test_running_listener_with_reuseaddr_blocks_reservation(self) -> None:
+        # Qt sets SO_REUSEADDR on its listening sockets on POSIX.
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            port = listener.getsockname()[1]
+            with (
+                self.assertRaisesRegex(InstallerError, "close Krita or free"),
+                BridgePortReservation([port]),
+            ):
+                pass
+
+    def test_second_reservation_fails_while_first_is_held(self) -> None:
+        port = _unused_port()
+        with (
+            BridgePortReservation([port]),
+            self.assertRaisesRegex(InstallerError, "close Krita or free"),
+            BridgePortReservation([port]),
+        ):
+            pass
+        self._assert_can_bind(port)
+
     def test_reservation_is_released_after_installer_success_and_error(self) -> None:
         success_port = _unused_port()
         InstallationManager(self.paths).install(
