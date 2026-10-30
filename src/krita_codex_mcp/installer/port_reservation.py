@@ -34,9 +34,16 @@ class BridgePortReservation:
                             socket.SO_EXCLUSIVEADDRUSE,
                             1,
                         )
-                    else:  # pragma: no cover - Windows is the supported target.
-                        reservation.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 0)
+                    else:
+                        # Connections the bridge closed keep its port in TIME_WAIT for
+                        # about a minute after Krita exits, and a bind without
+                        # SO_REUSEADDR is refused for that whole time. Listening keeps
+                        # the reservation exclusive: another socket cannot bind a port
+                        # held by a listener, with or without SO_REUSEADDR.
+                        reservation.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                     reservation.bind(("127.0.0.1", port))
+                    if os.name != "nt":
+                        reservation.listen(1)
                 except OSError:
                     reservation.close()
                     raise
